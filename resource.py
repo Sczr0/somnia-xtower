@@ -10,18 +10,16 @@ from queue import Queue
 from zipfile import ZipFile
 
 from UnityPy import Environment
-from UnityPy.classes import AudioClip
+from UnityPy.classes import AudioClip, Sprite
 from UnityPy.enums import ClassIDType
 
-# 尝试导入 FSB5，如果环境里没有安装，可能会报错
 try:
     from fsb5 import FSB5
 except ImportError:
-    print("警告: 未找到 fsb5 模块，音频将无法解码为 .ogg (可能保存为原格式或跳过)")
+    print("警告: 缺少 fsb5 模块，音频将无法解码。请运行 'pip install fsb5'。")
     FSB5 = None
 
 # ---------------- 配置区域 ----------------
-# 默认全开启
 CONFIG = {
     "avatar": True,
     "chart": True,
@@ -33,9 +31,10 @@ CONFIG = {
 
 # ---------------- 全局变量 ----------------
 queue_in = Queue()
-OUTPUT_ROOT = "output" # 默认值，会被 run() 函数覆盖
+OUTPUT_ROOT = "output"
+pool = None # 全局线程池，方便 process_object 函数调用
 
-# ---------------- 工具类 ----------------
+# ---------------- 工具类与函数 ----------------
 class ByteReader:
     def __init__(self, data):
         self.data = data
@@ -63,11 +62,9 @@ def io_worker():
         
         try:
             if isinstance(resource, BytesIO):
-                with open(full_path, "wb") as f:
-                    f.write(resource.getbuffer())
+                with open(full_path, "wb") as f: f.write(resource.getbuffer())
             else:
-                with open(full_path, "wb") as f:
-                    f.write(resource)
+                with open(full_path, "wb") as f: f.write(resource)
         except Exception as e:
             print(f"Error writing {rel_path}: {e}")
             
@@ -75,103 +72,105 @@ def io_worker():
 
 def save_image(rel_path, image):
     bytesIO = BytesIO()
+    # 统一保存为PNG，Pillow会自动处理JPG到PNG的转换
     image.save(bytesIO, "png")
     queue_in.put((rel_path, bytesIO))
 
 def save_music(rel_path, music: AudioClip):
-    if not FSB5:
-        return # 没库解不了
+    if not FSB5: return
     try:
-        # 尝试解码 FSB5
         fsb = FSB5(music.m_AudioData)
-        # 获取第一个 sample (通常只有一个)
-        if len(fsb.samples) > 0:
+        if fsb.samples:
             rebuilt_sample = fsb.rebuild_sample(fsb.samples[0])
             queue_in.put((rel_path, rebuilt_sample))
     except Exception as e:
         print(f"音频解码失败 {rel_path}: {e}")
 
-# ---------------- 核心逻辑 ----------------
+def _process_illustration(key, obj, subfolder):
+    """
+    曲绘处理函数，适应.jpg和.png，并正确提取ID
+    """
+    global pool
+    try:
+        # 路径分割: e.g., 'Assets/Tracks/SongID.0/Illustration.jpg'
+        parts = key.replace("\\", "/").split("/")
+        song_id_part = parts[-2] # e.g., "SongID.0"
+        song_id = song_id_part.replace(".0", "")
+        
+        # 统一保存为png
+        rel_path = f"{subfolder}/{song_id}.png"
+        
+        # 使用全局线程池提交图片保存任务，避免阻塞
+        pool.submit(save_image, rel_path, obj.image)
+    except Exception as e:
+        print(f"处理曲绘失败: {key}, 错误: {e}")
 
 def process_object(key, obj, avatar_map):
-    """处理单个资源对象"""
+    """
+    处理单个资源对象 (重构后的版本)
+    """
+    global pool
+    obj_type = obj.type.name
+    
     # 1. 头像
-    if CONFIG["avatar"] and key.startswith("avatar."):
+    if CONFIG["avatar"] and key.startswith("avatar.") and obj_type == "Sprite":
         real_key = key[7:]
-        # 尝试映射名字
         if real_key != "Cipher1" and real_key in avatar_map:
             real_key = avatar_map[real_key]
         
-        bytesIO = BytesIO()
-        obj.image.save(bytesIO, "png")
-        queue_in.put((f"avatar/{real_key}.png", bytesIO))
+        pool.submit(save_image, f"avatar/{real_key}.png", obj.image)
 
     # 2. 谱面 json
-    elif CONFIG["chart"] and "/Chart_" in key and key.endswith(".json"):
-        # key 类似: Assets/Tracks/SongID/Chart_IN.json
-        # 提取 SongID 和 Difficulty
-        parts = key.split("/")
-        # 倒数第二个通常是 SongID (但要小心路径变化)
-        # 原逻辑 key[:-14] 比较脆弱，我们用 split 稳妥点
-        # 假设格式是 .../SongID/Chart_XX.json
-        song_id = parts[-2]
-        diff = parts[-1].replace("Chart_", "").replace(".json", "")
-        
-        # 按照 output/chart/SongID/IN.json 结构
-        queue_in.put((f"chart/{song_id}.0/{diff}.json", obj.script))
+    elif CONFIG["chart"] and "/Chart_" in key and key.endswith(".json") and obj_type == "TextAsset":
+        try:
+            parts = key.replace("\\", "/").split("/")
+            song_id = parts[-2]
+            diff = parts[-1].replace("Chart_", "").replace(".json", "")
+            queue_in.put((f"chart/{song_id}.0/{diff}.json", obj.script))
+        except Exception as e:
+            print(f"处理谱面失败: {key}, 错误: {e}")
 
-    # 3. 曲绘 (模糊)
-    elif CONFIG["illustrationBlur"] and key.endswith(".0/IllustrationBlur."):
-        # Assets/Tracks/SongID.0/IllustrationBlur.
-        song_id = key.split("/")[-2].replace(".0", "") # 粗暴提取
-        bytesIO = BytesIO()
-        obj.image.save(bytesIO, "png")
-        queue_in.put((f"illustrationBlur/{song_id}.png", bytesIO))
+    # 3. 曲绘 (统一处理) - 这是关键的修改！
+    # 只要路径里包含特定字符串，并且是图片格式，就处理
+    elif obj_type == "Sprite":
+        if CONFIG["illustration"] and "Illustration." in key:
+            _process_illustration(key, obj, "illustration")
+        elif CONFIG["illustrationBlur"] and "IllustrationBlur." in key:
+            _process_illustration(key, obj, "illustrationBlur")
+        elif CONFIG["illustrationLowRes"] and "IllustrationLowRes." in key:
+            _process_illustration(key, obj, "illustrationLowRes")
 
-    # 4. 曲绘 (低清)
-    elif CONFIG["illustrationLowRes"] and key.endswith(".0/IllustrationLowRes."):
-        song_id = key.split("/")[-2].replace(".0", "")
-        save_image(f"illustrationLowRes/{song_id}.png", obj.image)
-
-    # 5. 曲绘 (高清)
-    elif CONFIG["illustration"] and key.endswith(".0/Illustration."):
-        song_id = key.split("/")[-2].replace(".0", "")
-        save_image(f"illustration/{song_id}.png", obj.image)
-
-    # 6. 音乐
-    elif CONFIG["music"] and key.endswith(".0/music.wav"):
-        song_id = key.split("/")[-2].replace(".0", "")
-        # 注意: 这里的 .wav 只是 Unity 里的名字，实际上内部数据是 fsb5
-        save_music(f"music/{song_id}.ogg", obj)
-
+    # 4. 音乐
+    elif CONFIG["music"] and key.endswith(".0/music.wav") and obj_type == "AudioClip":
+        try:
+            song_id = key.split("/")[-2].replace(".0", "")
+            pool.submit(save_music, f"music/{song_id}.ogg", obj)
+        except Exception as e:
+            print(f"处理音乐失败: {key}, 错误: {e}")
 
 def extract_resources(apk_path, output_dir="output"):
-    global OUTPUT_ROOT
+    global OUTPUT_ROOT, pool
     OUTPUT_ROOT = output_dir
 
     print(f"--- 开始提取资源文件 (Music/Image/Chart) ---")
-    print(f"APK: {apk_path}")
-    print(f"Output: {OUTPUT_ROOT}")
 
-    # 1. 准备目录
-    for sub in ["avatar", "chart", "illustrationBlur", "illustrationLowRes", "illustration", "music"]:
-        os.makedirs(os.path.join(OUTPUT_ROOT, sub), exist_ok=True)
+    # 1. 准备IO线程
+    io_thread = threading.Thread(target=io_worker)
+    io_thread.start()
     
-    # 2. 读取 Catalog
-    print("读取 Catalog...")
+    # 2. 读取和解析 Catalog
     try:
         with ZipFile(apk_path) as apk:
-            with apk.open("assets/aa/catalog.json") as f:
-                data = json.load(f)
+            with apk.open("assets/aa/catalog.json") as f: data = json.load(f)
     except KeyError:
-        print("错误: 无法在 APK 中找到 assets/aa/catalog.json，可能是旧版本或加固包")
+        print("错误: 找不到 catalog.json")
+        io_thread.join() # 确保线程退出
         return
-
-    # 3. 解析 Catalog (复制原作者的解码逻辑)
+    
+    # 解析 Catalog (此部分逻辑不变)
     key = base64.b64decode(data["m_KeyDataString"])
     bucket = base64.b64decode(data["m_BucketDataString"])
     entry = base64.b64decode(data["m_EntryDataString"])
-
     table = []
     reader = ByteReader(bucket)
     for x in range(reader.readInt()):
@@ -196,80 +195,60 @@ def extract_resources(apk_path, output_dir="output"):
             entry_value = entry_value[8] ^ entry_value[9] << 8
         table.append([key_value, entry_value])
     
-    # 处理 table 引用
     for i in range(len(table)):
         if table[i][1] != 65535:
             table[i][1] = table[table[i][1]][0]
     
-    # 过滤无效条目
     final_table = []
     for k, v in table:
         if isinstance(k, int): continue
         if k.startswith("Assets/Tracks/#"): continue
         if not (k.startswith("Assets/Tracks/") or k.startswith("avatar.")): continue
-        
-        if k.startswith("Assets/Tracks/"):
-            k = k[14:] # 去掉前缀方便处理
+        if k.startswith("Assets/Tracks/"): k = k[14:]
         final_table.append((k, v))
-    
-    print(f"Found {len(final_table)} resources to extract.")
+    print(f"Catalog 解析完成，找到 {len(final_table)} 个潜在资源。")
 
-    # 4. 加载 avatar 映射 (依赖 info/tmp.tsv，如果上一阶段 gameInformation 生成了的话)
+    # 3. 加载 avatar 映射 (不变)
     avatar_map = {}
     tmp_tsv = os.path.join(OUTPUT_ROOT, "info", "tmp.tsv")
     if os.path.exists(tmp_tsv):
-        try:
-            with open(tmp_tsv, encoding="utf8") as f:
-                for line in f:
-                    parts = line.strip().split("\t")
-                    if len(parts) >= 2:
-                        avatar_map[parts[1]] = parts[0]
-        except Exception:
-            print("Avatar map load failed.")
+        with open(tmp_tsv, encoding="utf8") as f:
+            for line in f:
+                parts = line.strip().split("\t")
+                if len(parts) >= 2: avatar_map[parts[1]] = parts[0]
 
-    # 5. 启动 IO 线程
-    io_thread = threading.Thread(target=io_worker)
-    io_thread.start()
-
-    # 6. 多线程解包
-    # 全量解包，不再过滤 update 数量
-    
+    # 4. 多线程解包
+    ti = time.time()
     classes_to_load = (ClassIDType.TextAsset, ClassIDType.Sprite, ClassIDType.AudioClip)
     
-    ti = time.time()
-    
     with ZipFile(apk_path) as apk:
-        # UnityPy 的 Environment 可以复用吗？对于多文件 bundle 最好是逐个处理
-        # 为了避免内存爆炸，我们分批或逐个处理
-        
         def job(item):
             k, v = item
-            print(f"Inspecting key: {k}") 
             try:
-                # 这是一个潜在的性能瓶颈：每次都 open zip 和 load file
-                # 但 UnityPy 没有简单的流式接口处理这种 Android bundle 路径
                 bundle_data = apk.read(f"assets/aa/Android/{v}")
                 env = Environment()
                 env.load_file(bundle_data, name=k)
-                
                 for obj in env.objects:
                     if obj.type in classes_to_load:
-                        # 再次过滤: 只需要 TextAsset(Chart), Sprite(Img), AudioClip(Music)
                         process_object(k, obj.read(), avatar_map)
-                        
             except Exception as e:
-                print(f"Failed to process {k}: {e}")
+                # 生产环境建议静默处理单个文件的错误，防止整个流程中断
+                # print(f"处理文件 {k} 失败: {e}")
+                pass 
 
-        # 使用线程池加速解析 (IO是瓶颈，所以用多线程有帮助)
+        # 初始化全局线程池
         with ThreadPoolExecutor(max_workers=4) as executor:
-            executor.map(job, final_table)
+            pool = executor
+            # map 会阻塞直到所有任务完成
+            pool.map(job, final_table)
 
-    # 7. 结束
+    # 5. 结束
     queue_in.put(None)
     io_thread.join()
     print(f"资源提取完成，耗时: {round(time.time() - ti, 2)}s")
 
 if __name__ == "__main__":
+    # 保留本地测试入口
     if len(sys.argv) > 1:
         extract_resources(sys.argv[1], "output")
     else:
