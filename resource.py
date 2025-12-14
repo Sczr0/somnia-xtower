@@ -67,7 +67,6 @@ def io_worker():
 def process_object(key, obj, avatar_map):
     """
     处理单个资源对象。
-    直接执行CPU密集型任务，然后把结果放入队列。
     """
     obj_type = obj.type.name
     
@@ -85,9 +84,11 @@ def process_object(key, obj, avatar_map):
     elif CONFIG["chart"] and "/Chart_" in key and key.endswith(".json") and obj_type == "TextAsset":
         try:
             parts = key.replace("\\", "/").split("/")
-            song_id = parts[-2]
+            song_id_folder = parts[-2] # e.g., "SongID.0"
             diff = parts[-1].replace("Chart_", "").replace(".json", "")
-            queue_in.put((f"chart/{song_id}.0/{diff}.json", obj.script))
+            
+            queue_in.put((f"chart/{song_id_folder}/{diff}.json", obj.script))
+
         except Exception as e:
             print(f"处理谱面失败: {key}, 错误: {e}")
 
@@ -118,7 +119,9 @@ def process_object(key, obj, avatar_map):
     elif CONFIG["music"] and key.endswith(".0/music.wav") and isinstance(obj, AudioClip):
         if not FSB5: return
         try:
-            song_id = key.split("/")[-2].replace(".0", "")
+            # 这里也统一使用 parts[-2] 提取，保持一致性
+            song_id_folder = key.replace("\\", "/").split("/")[-2]
+            song_id = song_id_folder.replace(".0", "")
             rel_path = f"music/{song_id}.ogg"
             
             fsb = FSB5(obj.m_AudioData)
@@ -126,7 +129,7 @@ def process_object(key, obj, avatar_map):
                 rebuilt_sample = fsb.rebuild_sample(fsb.samples[0])
                 queue_in.put((rel_path, rebuilt_sample))
         except Exception as e:
-            print(f"音频解码失败 {rel_path}: {e}")
+            print(f"音频解码失败 {key}: {e}")
 
 def extract_resources(apk_path, output_dir="output"):
     global OUTPUT_ROOT
@@ -141,8 +144,7 @@ def extract_resources(apk_path, output_dir="output"):
             with apk.open("assets/aa/catalog.json") as f: data = json.load(f)
     except KeyError:
         print("错误: 找不到 catalog.json")
-        queue_in.put(None)
-        io_thread.join()
+        queue_in.put(None); io_thread.join()
         return
 
     key = base64.b64decode(data["m_KeyDataString"])
@@ -151,9 +153,7 @@ def extract_resources(apk_path, output_dir="output"):
     table = []
     reader = ByteReader(bucket)
     for x in range(reader.readInt()):
-        key_position = reader.readInt()
-        key_type = key[key_position]
-        key_position += 1
+        key_position = reader.readInt(); key_type = key[key_position]; key_position += 1
         if key_type == 0:
             length = key[key_position]; key_position += 4
             key_value = key[key_position:key_position + length].decode()
