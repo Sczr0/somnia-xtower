@@ -244,6 +244,7 @@ def extract_resources(apk_path, output_dir="output"):
         
         def job(item):
             k, v = item
+            print(f"Inspecting key: {k}") 
             try:
                 # 这是一个潜在的性能瓶颈：每次都 open zip 和 load file
                 # 但 UnityPy 没有简单的流式接口处理这种 Android bundle 路径
