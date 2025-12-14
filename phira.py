@@ -7,9 +7,9 @@ BASE_DIR = "output"
 PHIRA_DIR = os.path.join(BASE_DIR, "phira")
 LEVELS = ["EZ", "HD", "IN", "AT"]
 
-# 设定一个固定的时间 (2020-01-01 00:00:00)
+# 设定一个固定的时间 (2025-01-01 00:00:00)
 # 格式: (年, 月, 日, 时, 分, 秒)
-FIXED_TIME = (2025, 12, 1, 0, 0, 0)
+FIXED_TIME = (2025, 1, 1, 0, 0, 0)
 
 def add_file_deterministic(zip_obj, file_path, arcname):
     """读取文件并以固定的时间戳写入 Zip"""
