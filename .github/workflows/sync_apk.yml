@@ -1,0 +1,62 @@
+name: Sync All RankHub Artifacts to R2
+
+on:
+  schedule:
+    # 每 4 小时运行一次
+    - cron: '0 */4 * * *'
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  sync-all:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS CLI (Connect to R2)
+        run: |
+          aws configure set aws_access_key_id ${{ secrets.R2_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          aws configure set default.region auto
+
+      - name: Process All Artifacts
+        run: |
+          # 创建一个文件夹存放准备上传的文件
+          mkdir upload_ready
+
+          # --- 1. 处理 arm64-v8a (最常用的安卓版) ---
+          echo "Processing arm64-v8a..."
+          wget -O temp_arm64.zip https://nightly.link/qianmo2233/RankHub/workflows/build_app.yml/main/Android-APK-arm64-v8a.zip
+          unzip -q temp_arm64.zip -d temp_dir_arm64
+          # 找到里面的apk并移动重命名
+          find temp_dir_arm64 -name "*.apk" -exec mv {} upload_ready/RankHub-arm64.apk \;
+
+          # --- 2. 处理 armeabi-v7a (老旧安卓机) ---
+          echo "Processing armeabi-v7a..."
+          wget -O temp_v7a.zip https://nightly.link/qianmo2233/RankHub/workflows/build_app.yml/main/Android-APK-armeabi-v7a.zip
+          unzip -q temp_v7a.zip -d temp_dir_v7a
+          find temp_dir_v7a -name "*.apk" -exec mv {} upload_ready/RankHub-v7a.apk \;
+
+          # --- 3. 处理 x86_64 (模拟器用) ---
+          echo "Processing x86_64..."
+          wget -O temp_x86.zip https://nightly.link/qianmo2233/RankHub/workflows/build_app.yml/main/Android-APK-x86_64.zip
+          unzip -q temp_x86.zip -d temp_dir_x86
+          find temp_dir_x86 -name "*.apk" -exec mv {} upload_ready/RankHub-x86.apk \;
+
+          # --- 4. 处理 iOS IPA (未签名) ---
+          echo "Processing iOS IPA..."
+          wget -O temp_ios.zip https://nightly.link/qianmo2233/RankHub/workflows/build_app.yml/main/Unsigned-iOS-IPA.zip
+          unzip -q temp_ios.zip -d temp_dir_ios
+          # iOS 解压出来通常是 .ipa 文件
+          find temp_dir_ios -name "*.ipa" -exec mv {} upload_ready/RankHub-iOS.ipa \;
+
+          # --- 列出最终要上传的文件 ---
+          echo "Files ready to upload:"
+          ls -l upload_ready/
+
+      - name: Upload All to R2
+        run: |
+          # 使用 sync 命令把 upload_ready 文件夹里的所有东西同步到 R2 根目录
+          # 并设置 ACL 为 public-read
+          
+          aws s3 sync ./upload_ready s3://${{ secrets.R2_BUCKET }}/ \
+            --endpoint-url https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com \
+            --delete \
+            --no-progress
