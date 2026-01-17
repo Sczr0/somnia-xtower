@@ -7,6 +7,7 @@ import hashlib
 OUTPUT_DIR = "output"
 JSON_INDEX_FILENAME = "files.json"
 CHECKSUM_FILENAME = "checksums.sha256"
+MANUAL_ASSETS_DIR = "manual_assets"
 
 # 要迁移的静态文件列表
 STATIC_FILES_TO_COPY = [
@@ -26,6 +27,7 @@ def calculate_sha256(filepath):
 
 def generate_site_resources():
     print("--- 开始生成网站索引与静态文件 ---")
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     # 1. 复制静态文件
     print("正在部署静态文件...")
@@ -37,6 +39,10 @@ def generate_site_resources():
             print(f"  - 已部署: {source_path} -> {target_path}")
         else:
             print(f"  - 警告: 静态文件 {source_path} 不存在，跳过。")
+
+    if os.path.isdir(MANUAL_ASSETS_DIR):
+        print(f"\n正在部署手动资源目录: {MANUAL_ASSETS_DIR} -> {OUTPUT_DIR}")
+        shutil.copytree(MANUAL_ASSETS_DIR, OUTPUT_DIR, dirs_exist_ok=True)
 
     # 2. 生成 files.json
     print("\n正在生成文件索引 (files.json)...")

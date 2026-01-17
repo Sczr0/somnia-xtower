@@ -17,6 +17,7 @@
       --text-sub: #555;
       --accent: #10b981;
       --error: #ef4444;
+      --safe-area-bottom: env(safe-area-inset-bottom);
       --card-bg-fallback: #ffffff; 
       --card-bg-glass: rgba(255, 255, 255, 0.75);
       --card-border: rgba(0, 0, 0, 0.08);
@@ -218,11 +219,18 @@
     }
 
     #search-results.show {
-      max-height: 55vh;
+      max-height: var(--results-max-height, 55vh);
       opacity: 1;
       overflow-y: auto;
       transform: translateY(0);
       padding: 8px 0;
+    }
+
+    #search-results.open-up {
+      top: auto;
+      bottom: 100%;
+      margin-top: 0;
+      margin-bottom: 10px;
     }
 
     .result-item {
@@ -312,6 +320,30 @@
       isLoading: true
     };
 
+    function getViewportHeight() {
+      return window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    }
+
+    function positionResults() {
+      if (!UI.results.classList.contains('show')) return;
+
+      const inputRect = UI.input.getBoundingClientRect();
+      const viewportHeight = getViewportHeight();
+      const gap = 10;
+      const minHeight = 120;
+      const preferredMax = Math.floor(viewportHeight * 0.55);
+      const safeBottom = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-area-bottom')) || 0;
+
+      const spaceBelow = viewportHeight - inputRect.bottom - gap - safeBottom;
+      const spaceAbove = inputRect.top - gap;
+      const openUp = spaceBelow < preferredMax && spaceAbove > spaceBelow;
+      UI.results.classList.toggle('open-up', openUp);
+
+      const available = openUp ? spaceAbove : spaceBelow;
+      const maxHeight = Math.max(minHeight, Math.min(preferredMax, Math.floor(available)));
+      document.documentElement.style.setProperty('--results-max-height', `${maxHeight}px`);
+    }
+
     async function initSystem() {
       try {
         UI.loader.classList.add('active');
@@ -365,8 +397,10 @@
           div.textContent = 'No echoes found.';
           UI.results.appendChild(div);
           UI.results.classList.add('show');
+          positionResults();
         } else {
           UI.results.classList.remove('show');
+          UI.results.classList.remove('open-up');
         }
         return;
       }
@@ -394,6 +428,7 @@
 
       UI.results.appendChild(fragment);
       UI.results.classList.add('show');
+      positionResults();
     }
 
     UI.input.addEventListener('input', (e) => {
@@ -407,6 +442,7 @@
       if (UI.input.value.trim()) {
         UI.body.classList.add('searching');
         UI.results.classList.add('show');
+        positionResults();
       }
     });
 
@@ -421,6 +457,7 @@
     document.addEventListener('click', (e) => {
       if (!UI.input.contains(e.target) && !UI.results.contains(e.target)) {
         UI.results.classList.remove('show');
+        UI.results.classList.remove('open-up');
         UI.body.classList.remove('searching');
       }
     });
@@ -429,6 +466,7 @@
       UI.input.value = '';
       UI.input.focus();
       UI.results.classList.remove('show');
+      UI.results.classList.remove('open-up');
       UI.clearBtn.classList.remove('visible');
       UI.body.classList.remove('searching');
     });
@@ -458,9 +496,16 @@
       else if (e.key === 'Escape') {
         UI.input.blur();
         UI.results.classList.remove('show');
+        UI.results.classList.remove('open-up');
         UI.body.classList.remove('searching');
       }
     });
+
+    window.addEventListener('resize', positionResults);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', positionResults);
+      window.visualViewport.addEventListener('scroll', positionResults);
+    }
 
     initSystem();
   </script>
