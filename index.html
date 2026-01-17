@@ -383,6 +383,33 @@
       }).slice(0, 20);
     }
 
+    function toSafeHref(path) {
+      return path.split('/').map(segment => encodeURIComponent(segment)).join('/');
+    }
+
+    function appendHighlightedText(container, text, regex) {
+      regex.lastIndex = 0;
+      let lastIndex = 0;
+      let match;
+
+      while ((match = regex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+          container.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+        }
+
+        const span = document.createElement('span');
+        span.className = 'highlight';
+        span.textContent = match[0];
+        container.appendChild(span);
+
+        lastIndex = match.index + match[0].length;
+      }
+
+      if (lastIndex < text.length) {
+        container.appendChild(document.createTextNode(text.slice(lastIndex)));
+      }
+    }
+
     function renderResults(matches, query) {
       UI.results.innerHTML = '';
       State.selectedIndex = -1;
@@ -408,7 +435,7 @@
       const fragment = document.createDocumentFragment();
       matches.forEach((file, index) => {
         const a = document.createElement('a');
-        a.href = file;
+        a.href = toSafeHref(file);
         a.className = 'result-item';
         a.role = 'option';
         a.id = `result-${index}`;
@@ -418,7 +445,8 @@
         if (terms.length > 0) {
           const escapedTerms = terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
           const regex = new RegExp(`(${escapedTerms.join('|')})`, 'gi');
-          a.innerHTML = file.replace(regex, '<span class="highlight">$1</span>');
+          a.replaceChildren();
+          appendHighlightedText(a, file, regex);
         } else {
           a.textContent = file;
         }

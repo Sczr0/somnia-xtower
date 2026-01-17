@@ -6,57 +6,116 @@ on:
     - cron: '0 */4 * * *'
   workflow_dispatch: # 允许手动触发
 
+concurrency:
+  group: sync-rankhub-artifacts
+  cancel-in-progress: true
+
 jobs:
   sync-all:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - name: Configure AWS CLI (Connect to R2)
-        run: |
-          aws configure set aws_access_key_id ${{ secrets.R2_ACCESS_KEY_ID }}
-          aws configure set aws_secret_access_key ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          aws configure set default.region auto
-
       - name: Process All Artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.RANKHUB_TOKEN || github.token }}
         run: |
+          set -euo pipefail
+
+          OWNER="Project-Fukakai"
+          REPO="RankHub"
+          WORKFLOW_FILE="nightly_build.yml"
+          BRANCH="main"
+          API_BASE="https://api.github.com"
+          AUTH_HEADER="Authorization: Bearer ${GITHUB_TOKEN}"
+
           # 创建一个文件夹存放准备上传的文件
-          mkdir upload_ready
+          rm -rf upload_ready temp_dir_arm64 temp_dir_v7a temp_dir_x86 temp_dir_ios temp_arm64.zip temp_v7a.zip temp_x86.zip temp_ios.zip workflow_runs.json artifacts.json
+          mkdir -p upload_ready
+
+          curl -fsSL \
+            -H "${AUTH_HEADER}" \
+            -H "Accept: application/vnd.github+json" \
+            "${API_BASE}/repos/${OWNER}/${REPO}/actions/workflows/${WORKFLOW_FILE}/runs?branch=${BRANCH}&status=success&per_page=1" \
+            -o workflow_runs.json
+
+          run_id="$(python -c "import json; data=json.load(open('workflow_runs.json','r',encoding='utf-8')); runs=data.get('workflow_runs') or []; print(runs[0]['id'] if runs else '')")"
+          test -n "${run_id}"
+
+          curl -fsSL \
+            -H "${AUTH_HEADER}" \
+            -H "Accept: application/vnd.github+json" \
+            "${API_BASE}/repos/${OWNER}/${REPO}/actions/runs/${run_id}/artifacts?per_page=100" \
+            -o artifacts.json
+
+          artifact_id_by_pattern() {
+            local pattern="$1"
+            local artifact_id
+            artifact_id="$(python -c "import json,re,sys; pat=re.compile(sys.argv[1],re.I); data=json.load(open('artifacts.json','r',encoding='utf-8')); arts=data.get('artifacts') or []; matches=[a for a in arts if pat.search(a.get('name',''))]; matches.sort(key=lambda a: (a.get('updated_at') or a.get('created_at') or ''), reverse=True); print(matches[0]['id'] if matches else '')" "${pattern}")"
+            test -n "${artifact_id}"
+            echo "${artifact_id}"
+          }
+
+          download_artifact_zip() {
+            local artifact_id="$1"
+            local zip_path="$2"
+            curl -fL --retry 5 --retry-delay 2 \
+              -H "${AUTH_HEADER}" \
+              -H "Accept: application/vnd.github+json" \
+              -o "${zip_path}" \
+              "${API_BASE}/repos/${OWNER}/${REPO}/actions/artifacts/${artifact_id}/zip"
+          }
 
           # --- 1. 处理 arm64-v8a (最常用的安卓版) ---
           echo "Processing arm64-v8a..."
-          wget -O temp_arm64.zip https://nightly.link/qianmo2233/RankHub/workflows/build_app.yml/main/Android-APK-arm64-v8a.zip
+          arm64_id="$(artifact_id_by_pattern '^RankHub-Android-.*arm64-v8a$')"
+          download_artifact_zip "${arm64_id}" temp_arm64.zip
           unzip -q temp_arm64.zip -d temp_dir_arm64
-          # 找到里面的apk并移动重命名
-          find temp_dir_arm64 -name "*.apk" -exec mv {} upload_ready/RankHub-arm64.apk \;
+          arm64_apk_path="$(find temp_dir_arm64 -type f -name "*.apk" -print -quit)"
+          test -n "${arm64_apk_path}"
+          mv "${arm64_apk_path}" upload_ready/RankHub-arm64.apk
 
           # --- 2. 处理 armeabi-v7a (老旧安卓机) ---
           echo "Processing armeabi-v7a..."
-          wget -O temp_v7a.zip https://nightly.link/qianmo2233/RankHub/workflows/build_app.yml/main/Android-APK-armeabi-v7a.zip
+          v7a_id="$(artifact_id_by_pattern '^RankHub-Android-.*armeabi-v7a$')"
+          download_artifact_zip "${v7a_id}" temp_v7a.zip
           unzip -q temp_v7a.zip -d temp_dir_v7a
-          find temp_dir_v7a -name "*.apk" -exec mv {} upload_ready/RankHub-v7a.apk \;
+          v7a_apk_path="$(find temp_dir_v7a -type f -name "*.apk" -print -quit)"
+          test -n "${v7a_apk_path}"
+          mv "${v7a_apk_path}" upload_ready/RankHub-v7a.apk
 
           # --- 3. 处理 x86_64 (模拟器用) ---
           echo "Processing x86_64..."
-          wget -O temp_x86.zip https://nightly.link/qianmo2233/RankHub/workflows/build_app.yml/main/Android-APK-x86_64.zip
+          x86_id="$(artifact_id_by_pattern '^RankHub-Android-.*x86_64$')"
+          download_artifact_zip "${x86_id}" temp_x86.zip
           unzip -q temp_x86.zip -d temp_dir_x86
-          find temp_dir_x86 -name "*.apk" -exec mv {} upload_ready/RankHub-x86.apk \;
+          x86_apk_path="$(find temp_dir_x86 -type f -name "*.apk" -print -quit)"
+          test -n "${x86_apk_path}"
+          mv "${x86_apk_path}" upload_ready/RankHub-x86.apk
 
           # --- 4. 处理 iOS IPA (未签名) ---
           echo "Processing iOS IPA..."
-          wget -O temp_ios.zip https://nightly.link/qianmo2233/RankHub/workflows/build_app.yml/main/Unsigned-iOS-IPA.zip
+          ios_id="$(artifact_id_by_pattern '^RankHub-iOS-.*$')"
+          download_artifact_zip "${ios_id}" temp_ios.zip
           unzip -q temp_ios.zip -d temp_dir_ios
           # iOS 解压出来通常是 .ipa 文件
-          find temp_dir_ios -name "*.ipa" -exec mv {} upload_ready/RankHub-iOS.ipa \;
+          ios_ipa_path="$(find temp_dir_ios -type f -name "*.ipa" -print -quit)"
+          test -n "${ios_ipa_path}"
+          mv "${ios_ipa_path}" upload_ready/RankHub-iOS.ipa
 
           # --- 列出最终要上传的文件 ---
           echo "Files ready to upload:"
           ls -l upload_ready/
 
       - name: Upload All to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: "true"
         run: |
           # 使用 sync 命令把 upload_ready 文件夹里的所有东西同步到 R2 根目录
-          # 并设置 ACL 为 public-read
           
           aws s3 sync ./upload_ready s3://${{ secrets.R2_BUCKET }}/ \
             --endpoint-url https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com \
-            --delete \
+            --only-show-errors \
             --no-progress
