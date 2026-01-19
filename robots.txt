@@ -1,4 +1,9 @@
 User-agent: *
-Allow: /
+Disallow: /music/
+Disallow: /chart/
+Disallow: /phira/
+Disallow: /output/
 Disallow: /files.json
 Disallow: /cdn-cgi/
+Disallow: /_headers
+Disallow: /_redirects

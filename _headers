@@ -1,5 +1,11 @@
 /*
+  # 跨域与方法
   Access-Control-Allow-Origin: *
-  Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
-  Access-Control-Allow-Headers: Content-Type, Authorization
+  Access-Control-Allow-Methods: GET, HEAD, OPTIONS
+  
   X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  
+  # HTTPS 强制 (HSTS)
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+  Cache-Control: public, max-age=600, stale-while-revalidate=2592000

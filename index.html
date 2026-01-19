@@ -3,12 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#fcfcfc" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
   <meta name="description" content="Somnia xTower Resource Index">
   <title>Somnia | Xtower</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/manual_assets/Source%20Han%20Serif%20CN%20Light/result.css">
+  <link rel="preload" href="files.json" as="fetch">
 
   <style>
     :root {
@@ -66,7 +71,7 @@
     /* --- 标题区域 --- */
     .center-content {
       text-align: center;
-      font-family: "Noto Serif SC", serif;
+      font-family: "Source Han Serif CN Light", "Noto Serif SC", serif;
       font-size: clamp(0.9rem, 3.8vw, 1.8rem);
       font-weight: 300;
       letter-spacing: 0.1em;
@@ -132,7 +137,7 @@
       color: var(--text-main);
       outline: none;
       text-align: center;
-      font-family: "Noto Serif SC", serif;
+      font-family: "Source Han Serif CN Light", "Noto Serif SC", serif;
       letter-spacing: 0.05em;
       transition: border-color 0.3s, transform 0.3s;
       /* 防止输入内容太长溢出 */
@@ -170,6 +175,10 @@
       position: absolute; right: 0; top: 50%; transform: translateY(-50%);
       width: 36px; height: 36px;
       background: transparent;
+      border: 0;
+      padding: 0;
+      appearance: none;
+      -webkit-appearance: none;
       mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z'/%3E%3C/svg%3E") no-repeat center / 18px 18px;
       -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z'/%3E%3C/svg%3E") no-repeat center / 18px 18px;
       background-color: var(--text-sub);
@@ -178,6 +187,7 @@
     }
     .clear-btn.visible { opacity: 0.6; pointer-events: auto; }
     .clear-btn:hover { opacity: 1; background-color: var(--accent); }
+    .clear-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 999px; }
 
     .loader {
       position: absolute; right: 8px; top: 50%; margin-top: -9px;
@@ -276,6 +286,10 @@
 
     @keyframes fadeInUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
+    }
   </style>
   <script defer src="https://umami.xtower.site/script.js" data-website-id="3fce56dc-4d07-471e-a5c7-0351f274575f"></script>
 </head>
@@ -290,9 +304,9 @@
     <div class="search-container">
       <div class="search-line"></div>
       <div class="input-wrapper">
-        <input type="text" id="search-input" placeholder="Initializing..." disabled aria-label="Search resources" aria-autocomplete="list" aria-controls="search-results">
+        <input type="search" id="search-input" placeholder="Initializing..." disabled aria-label="Search resources" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="search-results" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" inputmode="search" enterkeyhint="search">
         <div class="loader" id="loader"></div>
-        <div class="clear-btn" id="clear-btn" aria-label="Clear search"></div>
+        <button class="clear-btn" id="clear-btn" type="button" aria-label="Clear search"></button>
       </div>
       <div id="search-results" role="listbox"></div>
     </div>
@@ -316,6 +330,7 @@
 
     const State = {
       files: [],
+      filesLower: [],
       selectedIndex: -1,
       isLoading: true
     };
@@ -334,23 +349,32 @@
       const preferredMax = Math.floor(viewportHeight * 0.55);
       const safeBottom = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-area-bottom')) || 0;
 
-      const spaceBelow = viewportHeight - inputRect.bottom - gap - safeBottom;
-      const spaceAbove = inputRect.top - gap;
-      const openUp = spaceBelow < preferredMax && spaceAbove > spaceBelow;
-      UI.results.classList.toggle('open-up', openUp);
+      const spaceBelow = Math.max(0, viewportHeight - inputRect.bottom - gap - safeBottom);
+      UI.results.classList.remove('open-up');
 
-      const available = openUp ? spaceAbove : spaceBelow;
-      const maxHeight = Math.max(minHeight, Math.min(preferredMax, Math.floor(available)));
-      document.documentElement.style.setProperty('--results-max-height', `${maxHeight}px`);
+      const available = Math.floor(spaceBelow);
+      const maxHeight = available < minHeight ? available : Math.min(preferredMax, available);
+      document.documentElement.style.setProperty('--results-max-height', `${Math.max(0, maxHeight)}px`);
+    }
+
+    let positionRaf = 0;
+    function schedulePositionResults() {
+      if (positionRaf) return;
+      positionRaf = requestAnimationFrame(() => {
+        positionRaf = 0;
+        positionResults();
+      });
     }
 
     async function initSystem() {
       try {
         UI.loader.classList.add('active');
-        const response = await fetch('/files.json'); 
+        const response = await fetch('files.json'); 
         if (!response.ok) throw new Error("HTTP " + response.status);
         
-        State.files = await response.json();
+        const files = await response.json();
+        State.files = Array.isArray(files) ? files.filter(f => typeof f === 'string') : [];
+        State.filesLower = State.files.map(f => f.toLowerCase());
         
         State.isLoading = false;
         UI.input.disabled = false;
@@ -377,10 +401,14 @@
       if (!query) return [];
       const terms = query.toLowerCase().split(/\s+/).filter(t => t.length > 0);
       
-      return State.files.filter(file => {
-        const fLower = file.toLowerCase();
-        return terms.every(term => fLower.includes(term));
-      }).slice(0, 20);
+      const results = [];
+      for (let i = 0; i < State.files.length && results.length < 20; i++) {
+        const fLower = State.filesLower[i];
+        if (terms.every(term => fLower.includes(term))) {
+          results.push(State.files[i]);
+        }
+      }
+      return results;
     }
 
     function toSafeHref(path) {
@@ -424,10 +452,12 @@
           div.textContent = 'No echoes found.';
           UI.results.appendChild(div);
           UI.results.classList.add('show');
-          positionResults();
+          UI.input.setAttribute('aria-expanded', 'true');
+          schedulePositionResults();
         } else {
           UI.results.classList.remove('show');
           UI.results.classList.remove('open-up');
+          UI.input.setAttribute('aria-expanded', 'false');
         }
         return;
       }
@@ -440,12 +470,12 @@
         a.role = 'option';
         a.id = `result-${index}`;
         a.target = '_blank';
+        a.rel = 'noopener noreferrer';
         
         const terms = query.split(/\s+/).filter(t => t.length > 0);
         if (terms.length > 0) {
           const escapedTerms = terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
           const regex = new RegExp(`(${escapedTerms.join('|')})`, 'gi');
-          a.replaceChildren();
           appendHighlightedText(a, file, regex);
         } else {
           a.textContent = file;
@@ -456,29 +486,34 @@
 
       UI.results.appendChild(fragment);
       UI.results.classList.add('show');
-      positionResults();
+      UI.input.setAttribute('aria-expanded', 'true');
+      schedulePositionResults();
     }
 
-    UI.input.addEventListener('input', (e) => {
-      const val = e.target.value.trim();
+    let inputDebounceTimer = 0;
+    function onInputValueChanged(rawValue) {
+      const val = rawValue.trim();
       UI.clearBtn.classList.toggle('visible', val.length > 0);
-      if(val.length > 0) UI.body.classList.add('searching');
+      UI.body.classList.toggle('searching', val.length > 0);
       renderResults(filterData(val), val);
+    }
+    UI.input.addEventListener('input', (e) => {
+      const value = e.target.value;
+      window.clearTimeout(inputDebounceTimer);
+      inputDebounceTimer = window.setTimeout(() => onInputValueChanged(value), 40);
     });
 
     UI.input.addEventListener('focus', () => {
       if (UI.input.value.trim()) {
-        UI.body.classList.add('searching');
-        UI.results.classList.add('show');
-        positionResults();
+        onInputValueChanged(UI.input.value);
       }
     });
 
     UI.input.addEventListener('blur', () => {
       setTimeout(() => {
-        if (document.activeElement !== UI.input) {
-           UI.body.classList.remove('searching');
-        }
+        const active = document.activeElement;
+        const keepSearching = active === UI.input || active === UI.clearBtn || UI.results.contains(active);
+        if (!keepSearching) UI.body.classList.remove('searching');
       }, 200);
     });
     
@@ -487,6 +522,7 @@
         UI.results.classList.remove('show');
         UI.results.classList.remove('open-up');
         UI.body.classList.remove('searching');
+        UI.input.setAttribute('aria-expanded', 'false');
       }
     });
 
@@ -497,6 +533,7 @@
       UI.results.classList.remove('open-up');
       UI.clearBtn.classList.remove('visible');
       UI.body.classList.remove('searching');
+      UI.input.setAttribute('aria-expanded', 'false');
     });
 
     UI.input.addEventListener('keydown', (e) => {
@@ -526,13 +563,14 @@
         UI.results.classList.remove('show');
         UI.results.classList.remove('open-up');
         UI.body.classList.remove('searching');
+        UI.input.setAttribute('aria-expanded', 'false');
       }
     });
 
-    window.addEventListener('resize', positionResults);
+    window.addEventListener('resize', schedulePositionResults);
     if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', positionResults);
-      window.visualViewport.addEventListener('scroll', positionResults);
+      window.visualViewport.addEventListener('resize', schedulePositionResults);
+      window.visualViewport.addEventListener('scroll', schedulePositionResults);
     }
 
     initSystem();
