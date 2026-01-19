@@ -6,12 +6,9 @@
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#fcfcfc" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
-  <meta name="description" content="Somnia xTower Resource Index">
+  <meta name="description" content="Somnia Xtower Resource Index">
   <title>Somnia | Xtower</title>
   
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/manual_assets/Source%20Han%20Serif%20CN%20Light/result.css">
   <link rel="preload" href="files.json" as="fetch">
 
@@ -87,11 +84,6 @@
       opacity: 0;
       transform: translateY(20px);
       animation: fadeInUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-      
-      /* 修正3: 核心修改！移除 nowrap */
-      /* white-space: nowrap; <--- 删掉这行 */
-      
-      /* 使用 balance 让浏览器自动平衡每行的字数，形成倒金字塔或对称结构 */
       text-wrap: balance; 
       /* 防止中文标点在行首 */
       line-break: strict;
