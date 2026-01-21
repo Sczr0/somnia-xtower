@@ -64,6 +64,51 @@ def generate_site_resources():
         json.dump(file_list_for_search, f, ensure_ascii=False)
     print(f"已生成搜索索引: {json_path} (共 {len(file_list_for_search)} 个资源条目)")
 
+    # 2.5 生成 illustration 虚拟入口
+    print("\n正在生成 illustration 虚拟入口 (_redirects)...")
+    # 筛选 illustration/ 开头的文件
+    illustration_files = [f for f in file_list_for_search if f.startswith("illustration/")]
+    
+    if illustration_files:
+        # 配置
+        HASH_LENGTH = 2
+        VIRTUAL_PREFIX = "/ill"
+        total_virtual = 16 ** HASH_LENGTH
+        
+        print(f"  - 找到 {len(illustration_files)} 个插画文件")
+        print(f"  - 生成 {total_virtual} 个虚拟入口 (前缀 {VIRTUAL_PREFIX})")
+        
+        img_iterator = cycle(illustration_files)
+        new_rules = []
+        
+        new_rules.append(f"\n# === Auto-generated illustration redirects ({len(illustration_files)} source files) ===")
+        
+        for i in range(total_virtual):
+            hex_name = f"{i:0{HASH_LENGTH}x}"
+            target = next(img_iterator)
+            # 统一使用 .jpg 作为虚拟入口后缀，实际返回原文件类型
+            virtual_path = f"{VIRTUAL_PREFIX}/{hex_name}.png"
+            # 规则: /ill/00.jpg /illustration/xxx.png 200
+            new_rules.append(f"{virtual_path} /{target} 200")
+            
+        redirects_path = os.path.join(OUTPUT_DIR, "_redirects")
+        
+        # 读取现有内容 (如果有)
+        existing_content = ""
+        if os.path.exists(redirects_path):
+            with open(redirects_path, "r", encoding="utf-8") as f:
+                existing_content = f.read()
+        
+        # 写入合并后的内容
+        with open(redirects_path, "w", encoding="utf-8") as f:
+            if existing_content:
+                f.write(existing_content + "\n")
+            f.write("\n".join(new_rules))
+            
+        print(f"  - 已更新 _redirects 文件")
+    else:
+        print("  - 未找到 illustration/ 目录下的文件，跳过虚拟入口生成。")
+
     # 3. 生成校验和文件
     print(f"\n正在生成终极校验和文件 ({CHECKSUM_FILENAME})...")
     checksum_entries = []
