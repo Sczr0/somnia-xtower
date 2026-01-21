@@ -2,6 +2,7 @@ import os
 import json
 import shutil
 import hashlib
+import random
 from itertools import cycle
 
 # === 配置区域 ===
