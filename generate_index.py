@@ -2,6 +2,7 @@ import os
 import json
 import shutil
 import hashlib
+from itertools import cycle
 
 # === 配置区域 ===
 OUTPUT_DIR = "output"
@@ -72,25 +73,42 @@ def generate_site_resources():
     if illustration_files:
         # 配置
         HASH_LENGTH = 2
-        VIRTUAL_PREFIX = "/ill"
-        total_virtual = 16 ** HASH_LENGTH
         
+        # 256 (00-ff) per group
+        VIRTUAL_CAPACITY_PER_GROUP = 16 ** HASH_LENGTH 
+        
+        # 打乱图片顺序
+        random.shuffle(illustration_files)
+        
+        # 计算需要多少个分组才能装下所有图片
+        # 例如: 298 张图 / 256 = 1.16 -> 需要 2 个组
+        import math
+        num_groups = math.ceil(len(illustration_files) / VIRTUAL_CAPACITY_PER_GROUP)
+        
+        # 为了冗余和未来扩展，至少保证生成2个组 (512容量)
+        # 如果图片非常少，也会生成两个组，只是会有重复
+        if num_groups < 2:
+            num_groups = 2
+            
         print(f"  - 找到 {len(illustration_files)} 个插画文件")
-        print(f"  - 生成 {total_virtual} 个虚拟入口 (前缀 {VIRTUAL_PREFIX})")
+        print(f"  - 将生成 {num_groups} 个分组 (每组 {VIRTUAL_CAPACITY_PER_GROUP} 个入口)，总容量 {num_groups * VIRTUAL_CAPACITY_PER_GROUP}")
         
         img_iterator = cycle(illustration_files)
         new_rules = []
+        new_rules.append(f"\n# === Auto-generated illustration redirects ({len(illustration_files)} files, {num_groups} groups) ===")
         
-        new_rules.append(f"\n# === Auto-generated illustration redirects ({len(illustration_files)} source files) ===")
-        
-        for i in range(total_virtual):
-            hex_name = f"{i:0{HASH_LENGTH}x}"
-            target = next(img_iterator)
-            # 统一使用 .jpg 作为虚拟入口后缀，实际返回原文件类型
-            virtual_path = f"{VIRTUAL_PREFIX}/{hex_name}.png"
-            # 规则: /ill/00.jpg /illustration/xxx.png 200
-            new_rules.append(f"{virtual_path} /{target} 200")
+        for group_id in range(1, num_groups + 1):
+            # 比如 /ill/1, /ill/2
+            group_prefix = f"/ill/{group_id}"
             
+            for i in range(VIRTUAL_CAPACITY_PER_GROUP):
+                hex_name = f"{i:0{HASH_LENGTH}x}"
+                target = next(img_iterator)
+                
+                # 规则: /ill/1/00.jpg -> /illustration/a.png
+                virtual_path = f"{group_prefix}/{hex_name}.jpg"
+                new_rules.append(f"{virtual_path} /{target} 200")
+                
         redirects_path = os.path.join(OUTPUT_DIR, "_redirects")
         
         # 读取现有内容 (如果有)
