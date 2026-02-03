@@ -30,9 +30,15 @@ def calculate_sha256(filepath):
 def generate_site_resources():
     print("--- 开始生成网站索引与静态文件 ---")
     os.makedirs(OUTPUT_DIR, exist_ok=True)
+    
+    # 1. 部署手动资源 (Manual Assets) - 优先级最低，先复制
+    # 这样后续步骤生成的文件如果重名，会覆盖掉 manual_assets 的内容
+    if os.path.isdir(MANUAL_ASSETS_DIR):
+        print(f"\n[Step 1] 部署手动资源目录: {MANUAL_ASSETS_DIR} -> {OUTPUT_DIR}")
+        shutil.copytree(MANUAL_ASSETS_DIR, OUTPUT_DIR, dirs_exist_ok=True)
 
-    # 1. 复制静态文件
-    print("正在部署静态文件...")
+    # 2. 复制静态文件 (覆盖 manual_assets)
+    print("\n[Step 2] 部署静态文件...")
     for filename in STATIC_FILES_TO_COPY:
         source_path = filename
         target_path = os.path.join(OUTPUT_DIR, filename)
@@ -42,12 +48,8 @@ def generate_site_resources():
         else:
             print(f"  - 警告: 静态文件 {source_path} 不存在，跳过。")
 
-    if os.path.isdir(MANUAL_ASSETS_DIR):
-        print(f"\n正在部署手动资源目录: {MANUAL_ASSETS_DIR} -> {OUTPUT_DIR}")
-        shutil.copytree(MANUAL_ASSETS_DIR, OUTPUT_DIR, dirs_exist_ok=True)
-
-    # 2. 生成 files.json
-    print("\n正在生成文件索引 (files.json)...")
+    # 3. 生成 files.json
+    print("\n[Step 3] 正在生成文件索引 (files.json)...")
     file_list_for_search = []
     
     for root, dirs, files in os.walk(OUTPUT_DIR):

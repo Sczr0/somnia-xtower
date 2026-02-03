@@ -57,6 +57,19 @@ jobs:
         run: |
           python main.py
 
+      # 5.5 运行 PhiInfo
+      - name: Run PhiInfo Extraction
+        run: |
+          chmod +x ./PhiInfo.CLI
+          ./PhiInfo.CLI game.apk
+          
+          # 将 PhiInfo 生成的文件移动到 output/info
+          mkdir -p output/info
+          mv output/song_info.json output/info/ 2>/dev/null || true
+          mv output/collection_info.json output/info/ 2>/dev/null || true
+          mv output/avatars.json output/info/ 2>/dev/null || true
+          mv output/tips.json output/info/ 2>/dev/null || true
+
       # 6. 部署到 Cloudflare Pages
       # 直接上传 output 文件夹
       - name: Deploy to Cloudflare Pages
