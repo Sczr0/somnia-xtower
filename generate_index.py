@@ -27,15 +27,38 @@ def calculate_sha256(filepath):
             sha256_hash.update(byte_block)
     return sha256_hash.hexdigest()
 
+def copy_missing_files(source_dir, target_dir):
+    copied_count = 0
+    skipped_count = 0
+
+    for root, dirs, files in os.walk(source_dir):
+        for file in files:
+            source_path = os.path.join(root, file)
+            relative_path = os.path.relpath(source_path, source_dir)
+            target_path = os.path.join(target_dir, relative_path)
+
+            parent_dir = os.path.dirname(target_path)
+            if parent_dir:
+                os.makedirs(parent_dir, exist_ok=True)
+
+            if os.path.exists(target_path):
+                skipped_count += 1
+                continue
+
+            shutil.copy2(source_path, target_path)
+            copied_count += 1
+
+    return copied_count, skipped_count
+
 def generate_site_resources():
     print("--- 开始生成网站索引与静态文件 ---")
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
-    # 1. 部署手动资源 (Manual Assets) - 优先级最低，先复制
-    # 这样后续步骤生成的文件如果重名，会覆盖掉 manual_assets 的内容
+    # 1. 部署手动资源 (Manual Assets)
     if os.path.isdir(MANUAL_ASSETS_DIR):
         print(f"\n[Step 1] 部署手动资源目录: {MANUAL_ASSETS_DIR} -> {OUTPUT_DIR}")
-        shutil.copytree(MANUAL_ASSETS_DIR, OUTPUT_DIR, dirs_exist_ok=True)
+        copied_count, skipped_count = copy_missing_files(MANUAL_ASSETS_DIR, OUTPUT_DIR)
+        print(f"  - 兜底补齐文件: {copied_count}，跳过同名文件: {skipped_count}")
 
     # 2. 复制静态文件 (覆盖 manual_assets)
     print("\n[Step 2] 部署静态文件...")
