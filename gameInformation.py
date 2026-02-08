@@ -2,7 +2,30 @@ import json
 import os
 import sys
 import zipfile
+import csv
 from UnityPy import Environment
+
+
+def _sanitize_song_id(song_id):
+    """统一处理谱面 ID 后缀"""
+    if song_id.endswith(".0") or song_id.endswith("_0"):
+        return song_id[:-2]
+    return song_id
+
+
+def _safe_avatar_key(addressable_key):
+    """兼容 addressableKey 为空或长度不足的情况"""
+    if isinstance(addressable_key, str) and len(addressable_key) >= 7:
+        return addressable_key[7:]
+    return ""
+
+
+def _to_fixed_4_difficulty(difficulty_values):
+    """将难度列表补齐为 EZ/HD/IN/AT 四列"""
+    values = list(difficulty_values[:4])
+    while len(values) < 4:
+        values.append("")
+    return values
 
 # 适配自动化：不再依赖 sys.argv，而是封装成函数供 main.py 调用
 def extract_game_info(apk_path, output_root="output"):
@@ -55,9 +78,11 @@ def extract_game_info(apk_path, output_root="output"):
         print("错误：未找到 GameInformation 数据块！")
         return
 
-    # === 处理 difficulty.tsv 和 info.tsv ===
+    # === 处理 difficulty.tsv / info.tsv 以及 CSV 输出 ===
     difficulty_list = []
     table_list = []
+    difficulty_csv_list = []
+    info_csv_list = []
     
     for key, songs in GameInformation["song"].items():
         if key == "otherSongs":
@@ -75,13 +100,15 @@ def extract_game_info(apk_path, output_root="output"):
             diff_str = [str(round(d, 1)) for d in song["difficulty"]]
             
             # ID修正
-            song_id = song["songsId"]
-            if song_id.endswith(".0"): # 移除可能的后缀
-                song_id = song_id[:-2]
-            elif song_id.endswith("_0"):
-                song_id = song_id[:-2]
+            song_id = _sanitize_song_id(song["songsId"])
+            fixed_diff = _to_fixed_4_difficulty(diff_str)
 
             difficulty_list.append([song_id] + diff_str)
+            difficulty_csv_list.append([song_id] + fixed_diff)
+
+            info_csv_row = [song_id, song["songsName"], song["composer"], song["illustrator"]]
+            info_csv_row.extend(fixed_diff)
+            info_csv_list.append(info_csv_row)
             
             # info.tsv 结构: ID, Name, Composer, Illustrator, Charter...
             row = [song_id, song["songsName"], song["composer"], song["illustrator"]]
@@ -97,6 +124,18 @@ def extract_game_info(apk_path, output_root="output"):
     with open(os.path.join(info_dir, "info.tsv"), "w", encoding="utf8") as f:
         for item in table_list:
             f.write("\t".join(map(str, item)) + "\n")
+
+    # 写入 output/info/difficulty.csv
+    with open(os.path.join(info_dir, "difficulty.csv"), "w", encoding="utf8", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["id", "EZ", "HD", "IN", "AT"])
+        writer.writerows(difficulty_csv_list)
+
+    # 写入 output/info/info.csv
+    with open(os.path.join(info_dir, "info.csv"), "w", encoding="utf8", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["id", "song", "composer", "illustrator", "EZ", "HD", "IN", "AT"])
+        writer.writerows(info_csv_list)
 
     # === 处理 KeyStore (single.txt, illustration.txt) ===
     single = []
@@ -114,16 +153,25 @@ def extract_game_info(apk_path, output_root="output"):
     with open(os.path.join(info_dir, "illustration.txt"), "w", encoding="utf8") as f:
         f.write("\n".join(illustration))
 
-    # === 处理 Collections (collection.tsv, avatar.txt) ===
+    # === 处理 Collections (collection.tsv, avatar.txt, tmp.tsv) ===
     if Collections:
-        with open(os.path.join(info_dir, "collection.tsv"), "w", encoding="utf8") as f:
-            for item in Collections.collectionItems:
-                f.write(f"{item.key}\t{item.multiLanguageTitle.chinese}\t{item.subIndex}\n")
+        collection_dict = {}
+        for item in Collections.collectionItems:
+            if item.key in collection_dict:
+                collection_dict[item.key][1] = item.subIndex
+            else:
+                collection_dict[item.key] = [item.multiLanguageTitle.chinese, item.subIndex]
 
-        with open(os.path.join(info_dir, "avatar.txt"), "w", encoding="utf8") as f_avatar:
-             # 原代码逻辑：avatar.txt存名字
+        with open(os.path.join(info_dir, "collection.tsv"), "w", encoding="utf8") as f:
+            for key, value in collection_dict.items():
+                f.write(f"{key}\t{value[0]}\t{value[1]}\n")
+
+        with open(os.path.join(info_dir, "avatar.txt"), "w", encoding="utf8") as f_avatar, \
+             open(os.path.join(info_dir, "tmp.tsv"), "w", encoding="utf8") as f_tmp:
+            # avatar.txt 存头像名称，tmp.tsv 存头像名称到资源键的映射
             for item in Collections.avatars:
                 f_avatar.write(f"{item.name}\n")
+                f_tmp.write(f"{item.name}\t{_safe_avatar_key(getattr(item, 'addressableKey', ''))}\n")
     
     # === 处理 Tips ===
     if Tips and len(Tips.tips) > 0:
