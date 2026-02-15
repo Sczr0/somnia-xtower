@@ -1,0 +1,127 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "PhiInfo.CLI/1.0.0": {
+        "dependencies": {
+          "PhiInfo.Core": "1.0.0"
+        },
+        "runtime": {
+          "PhiInfo.CLI.dll": {}
+        }
+      },
+      "AssetRipper.Primitives/3.1.3": {
+        "runtime": {
+          "lib/net8.0/AssetRipper.Primitives.dll": {
+            "assemblyVersion": "3.1.3.0",
+            "fileVersion": "3.1.3.0"
+          }
+        }
+      },
+      "AssetsTools.NET/3.0.3": {
+        "runtime": {
+          "lib/netstandard2.0/AssetsTools.NET.dll": {
+            "assemblyVersion": "3.0.0.0",
+            "fileVersion": "3.0.0.0"
+          }
+        }
+      },
+      "AssetsTools.NET.Cpp2IL/3.0.2": {
+        "dependencies": {
+          "AssetsTools.NET": "3.0.3",
+          "Samboy063.LibCpp2IL": "2022.1.0-pre-release.19"
+        },
+        "runtime": {
+          "lib/netstandard2.0/AssetsTools.NET.Cpp2IL.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "Samboy063.LibCpp2IL/2022.1.0-pre-release.19": {
+        "dependencies": {
+          "AssetRipper.Primitives": "3.1.3",
+          "Samboy063.WasmDisassembler": "2022.1.0-pre-release.19"
+        },
+        "runtime": {
+          "lib/net9.0/LibCpp2IL.dll": {
+            "assemblyVersion": "2022.1.0.0",
+            "fileVersion": "2022.1.0.0"
+          }
+        }
+      },
+      "Samboy063.WasmDisassembler/2022.1.0-pre-release.19": {
+        "runtime": {
+          "lib/net9.0/WasmDisassembler.dll": {
+            "assemblyVersion": "2022.1.0.0",
+            "fileVersion": "2022.1.0.0"
+          }
+        }
+      },
+      "PhiInfo.Core/1.0.0": {
+        "dependencies": {
+          "AssetsTools.NET": "3.0.3",
+          "AssetsTools.NET.Cpp2IL": "3.0.2",
+          "Samboy063.LibCpp2IL": "2022.1.0-pre-release.19"
+        },
+        "runtime": {
+          "PhiInfo.Core.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "PhiInfo.CLI/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "AssetRipper.Primitives/3.1.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-djZbN/+EXmI+Oia9Pm0LyjZVCPLf60TPSL5rGb7mBEYM5F4CN3nPFXvl2yA5LanPZoHS1Yq7PghGUmkP7Pv9RQ==",
+      "path": "assetripper.primitives/3.1.3",
+      "hashPath": "assetripper.primitives.3.1.3.nupkg.sha512"
+    },
+    "AssetsTools.NET/3.0.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-U6qH5K6wuu1fqrR33+YBRECaSgl3/vOUzuOrdvduhdNph0irMW5sspG6z0N5v2dm/sg+bRcbaaTQIit9v7yxeg==",
+      "path": "assetstools.net/3.0.3",
+      "hashPath": "assetstools.net.3.0.3.nupkg.sha512"
+    },
+    "AssetsTools.NET.Cpp2IL/3.0.2": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-0hrsY+vGyt0PY/1pj3P3ibfYJ4tVoEDDFBITZKOG00QegmnWb+XMmTT0ky3b5lh9EkTFBvnOtPlHggTWCc3Xyw==",
+      "path": "assetstools.net.cpp2il/3.0.2",
+      "hashPath": "assetstools.net.cpp2il.3.0.2.nupkg.sha512"
+    },
+    "Samboy063.LibCpp2IL/2022.1.0-pre-release.19": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-/n8p81ltd38BeNNS2xUNPGMSzxk/UGXr9cRNqG1MaLogzANNNrvCAXqWmNMM3tZctjp7vqTxEA+e4J4ngul8Fg==",
+      "path": "samboy063.libcpp2il/2022.1.0-pre-release.19",
+      "hashPath": "samboy063.libcpp2il.2022.1.0-pre-release.19.nupkg.sha512"
+    },
+    "Samboy063.WasmDisassembler/2022.1.0-pre-release.19": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-uVQdYm/J6+jJ1xt6GJ3hNhXhciwlX+LmHTPITu9jjZ75T33YJuuTD7pLVYuMymr+4gSVisg7f1wterFSyqJBWA==",
+      "path": "samboy063.wasmdisassembler/2022.1.0-pre-release.19",
+      "hashPath": "samboy063.wasmdisassembler.2022.1.0-pre-release.19.nupkg.sha512"
+    },
+    "PhiInfo.Core/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

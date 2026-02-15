@@ -57,6 +57,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # 4.5 安装 .NET 10（PhiInfo.CLI 运行时）
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          include-prerelease: true
+
       # 5. 运行主脚本 (核心逻辑)
       - name: Run Build Script (Main)
         env:
@@ -70,15 +77,11 @@ jobs:
       # 5.5 运行 PhiInfo
       - name: Run PhiInfo Extraction
         run: |
-          chmod +x ./PhiInfo.CLI
-          ./PhiInfo.CLI game.apk
+          dotnet PhiInfo.CLI/PhiInfo.CLI.dll game.apk false
           
-          # 将 PhiInfo 生成的文件移动到 output/info
+          # 将 PhiInfo 生成的 all_info.json 移动到 output/info
           mkdir -p output/info
-          mv output/song_info.json output/info/ 2>/dev/null || true
-          mv output/collection_info.json output/info/ 2>/dev/null || true
-          mv output/avatars.json output/info/ 2>/dev/null || true
-          mv output/tips.json output/info/ 2>/dev/null || true
+          mv output/all_info.json output/info/ 2>/dev/null || true
 
       # 5.6 生成版本文件，供前端/客户端读取
       - name: Generate Version File
