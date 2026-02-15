@@ -124,11 +124,16 @@ def main():
         flush_print(f"!! Phira 打包失败: {e}")
 
     # === 5. 生成索引 (Index) ===
-    flush_print("\n--- [Step 5] 生成网站索引 (Generate Index) ---")
-    try:
-        generate_index.generate_site_resources()
-    except Exception as e:
-        flush_print(f"!! 生成索引失败: {e}")
+    # 允许在 CI 中先跳过索引，待 PhiInfo 等后处理完成后再统一生成
+    skip_index = os.environ.get("SKIP_INDEX_GENERATION", "").lower() in ("1", "true", "yes")
+    if skip_index:
+        flush_print("\n--- [Step 5] 跳过索引生成 (由后续流程统一生成) ---")
+    else:
+        flush_print("\n--- [Step 5] 生成网站索引 (Generate Index) ---")
+        try:
+            generate_index.generate_site_resources()
+        except Exception as e:
+            flush_print(f"!! 生成索引失败: {e}")
 
     # === 结束 ===
     elapsed = time.time() - start_time
