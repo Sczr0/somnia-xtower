@@ -22,7 +22,7 @@
           }
         }
       },
-      "AssetsTools.NET/3.0.3": {
+      "AssetsTools.NET/3.0.4": {
         "runtime": {
           "lib/netstandard2.0/AssetsTools.NET.dll": {
             "assemblyVersion": "3.0.0.0",
@@ -30,9 +30,9 @@
           }
         }
       },
-      "AssetsTools.NET.Cpp2IL/3.0.2": {
+      "AssetsTools.NET.Cpp2IL/3.0.4": {
         "dependencies": {
-          "AssetsTools.NET": "3.0.3",
+          "AssetsTools.NET": "3.0.4",
           "Samboy063.LibCpp2IL": "2022.1.0-pre-release.19"
         },
         "runtime": {
@@ -64,8 +64,8 @@
       },
       "PhiInfo.Core/1.0.0": {
         "dependencies": {
-          "AssetsTools.NET": "3.0.3",
-          "AssetsTools.NET.Cpp2IL": "3.0.2",
+          "AssetsTools.NET": "3.0.4",
+          "AssetsTools.NET.Cpp2IL": "3.0.4",
           "Samboy063.LibCpp2IL": "2022.1.0-pre-release.19"
         },
         "runtime": {
@@ -90,19 +90,19 @@
       "path": "assetripper.primitives/3.1.3",
       "hashPath": "assetripper.primitives.3.1.3.nupkg.sha512"
     },
-    "AssetsTools.NET/3.0.3": {
+    "AssetsTools.NET/3.0.4": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-U6qH5K6wuu1fqrR33+YBRECaSgl3/vOUzuOrdvduhdNph0irMW5sspG6z0N5v2dm/sg+bRcbaaTQIit9v7yxeg==",
-      "path": "assetstools.net/3.0.3",
-      "hashPath": "assetstools.net.3.0.3.nupkg.sha512"
+      "sha512": "sha512-NqYy5UIucwKwdkpamFTi8lr53hD+V8qQmbHzztQj1v4Pq1G4TjNlpkUWOhktTLBqBm4aPRaAkpFgB+3TDEuomw==",
+      "path": "assetstools.net/3.0.4",
+      "hashPath": "assetstools.net.3.0.4.nupkg.sha512"
     },
-    "AssetsTools.NET.Cpp2IL/3.0.2": {
+    "AssetsTools.NET.Cpp2IL/3.0.4": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-0hrsY+vGyt0PY/1pj3P3ibfYJ4tVoEDDFBITZKOG00QegmnWb+XMmTT0ky3b5lh9EkTFBvnOtPlHggTWCc3Xyw==",
-      "path": "assetstools.net.cpp2il/3.0.2",
-      "hashPath": "assetstools.net.cpp2il.3.0.2.nupkg.sha512"
+      "sha512": "sha512-G2AU/nOSqHnDWRVa8WqAb9Pt8PaG5aJIdGgkTCgZ1iNoVvseOIqFHowMJYwWrYTT5gQ79Dqd4Ta7fx6cILDObw==",
+      "path": "assetstools.net.cpp2il/3.0.4",
+      "hashPath": "assetstools.net.cpp2il.3.0.4.nupkg.sha512"
     },
     "Samboy063.LibCpp2IL/2022.1.0-pre-release.19": {
       "type": "package",
