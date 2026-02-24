@@ -35,7 +35,8 @@ queue_in = Queue()
 OUTPUT_ROOT = "output"
 AVATAR_IMAGE_EXPORT_FORMATS = ("png",)
 DEFAULT_ILLUSTRATION_IMAGE_EXPORT_FORMATS = ("png", "webp", "avif")
-ILLUSTRATION_IMAGE_EXPORT_FORMATS = DEFAULT_ILLUSTRATION_IMAGE_EXPORT_FORMATS
+ILLUSTRATION_IMAGE_EXPORT_FORMATS = ("png",)
+LILITH_ILL_EXPORT_FORMATS = ("webp", "avif")
 
 
 def resolve_illustration_export_formats(raw_formats=None, support_checker=None, logger=print):
@@ -56,6 +57,18 @@ def resolve_illustration_export_formats(raw_formats=None, support_checker=None, 
             logger=logger,
         )
     )
+
+
+def resolve_lilith_ill_export_formats(raw_formats=None, support_checker=None, logger=print):
+    """
+    解析 lilith/ill 的实验格式，显式排除 png，避免在 illustration 存重复副本。
+    """
+    resolved_with_png = resolve_illustration_export_formats(
+        raw_formats=raw_formats,
+        support_checker=support_checker,
+        logger=logger,
+    )
+    return tuple(fmt for fmt in resolved_with_png if fmt != "png")
 
 # ---------------- 工具类与函数 ----------------
 class ByteReader:
@@ -183,14 +196,27 @@ def process_object(key, obj, avatar_map):
             if subfolder:
                 parts = key.replace("\\", "/").split("/")
                 song_id = parts[-2].replace(".0", "")
-                export_formats = ILLUSTRATION_IMAGE_EXPORT_FORMATS if subfolder == "illustration" else AVATAR_IMAGE_EXPORT_FORMATS
+                if subfolder == "illustration":
+                    for rel_path, payload in iter_image_variant_payloads(
+                        obj.image,
+                        f"illustration/{song_id}",
+                        ILLUSTRATION_IMAGE_EXPORT_FORMATS,
+                    ):
+                        queue_in.put((rel_path, payload))
 
-                for rel_path, payload in iter_image_variant_payloads(
-                    obj.image,
-                    f"{subfolder}/{song_id}",
-                    export_formats,
-                ):
-                    queue_in.put((rel_path, payload))
+                    for rel_path, payload in iter_image_variant_payloads(
+                        obj.image,
+                        f"lilith/ill/{song_id}",
+                        LILITH_ILL_EXPORT_FORMATS,
+                    ):
+                        queue_in.put((rel_path, payload))
+                else:
+                    for rel_path, payload in iter_image_variant_payloads(
+                        obj.image,
+                        f"{subfolder}/{song_id}",
+                        AVATAR_IMAGE_EXPORT_FORMATS,
+                    ):
+                        queue_in.put((rel_path, payload))
 
         except Exception as e:
             print(f"处理曲绘失败: {key}, 错误: {e}")
@@ -212,14 +238,22 @@ def process_object(key, obj, avatar_map):
             print(f"音频解码失败 {key}: {e}")
 
 def extract_resources(apk_path, output_dir="output"):
-    global OUTPUT_ROOT, queue_in, ILLUSTRATION_IMAGE_EXPORT_FORMATS
+    global OUTPUT_ROOT, queue_in, ILLUSTRATION_IMAGE_EXPORT_FORMATS, LILITH_ILL_EXPORT_FORMATS
     OUTPUT_ROOT = output_dir
     print(f"--- 开始提取资源文件 (Music/Image/Chart) ---", flush=True)
-    ILLUSTRATION_IMAGE_EXPORT_FORMATS = resolve_illustration_export_formats()
+    ILLUSTRATION_IMAGE_EXPORT_FORMATS = ("png",)
+    LILITH_ILL_EXPORT_FORMATS = resolve_lilith_ill_export_formats()
     print(
         f"[image_export] 曲绘原图导出格式: {', '.join(ILLUSTRATION_IMAGE_EXPORT_FORMATS)}",
         flush=True,
     )
+    if LILITH_ILL_EXPORT_FORMATS:
+        print(
+            f"[image_export] lilith/ill 实验格式: {', '.join(LILITH_ILL_EXPORT_FORMATS)}",
+            flush=True,
+        )
+    else:
+        print("[image_export] lilith/ill 实验格式: 未启用（无可用编码器）", flush=True)
 
     cpu_count = os.cpu_count() or 2
     max_workers = _get_int_env("RESOURCE_WORKERS", min(4, cpu_count), min_value=1, max_value=16)

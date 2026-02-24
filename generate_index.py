@@ -51,52 +51,6 @@ def copy_missing_files(source_dir, target_dir):
 
     return copied_count, skipped_count
 
-
-def materialize_lilith_illustration_variants(output_dir):
-    """
-    将曲绘原图的 webp/avif 复制到物理目录 output/lilith/ill。
-    """
-    source_root = os.path.join(output_dir, "illustration")
-    target_root = os.path.join(output_dir, "lilith", "ill")
-    copied_count = 0
-    source_count = 0
-    supported_extensions = {".webp", ".avif"}
-
-    if not os.path.isdir(source_root):
-        return {
-            "source_count": 0,
-            "copied_count": 0,
-            "target_root": target_root,
-        }
-
-    # 每次重建，避免遗留旧版本文件。
-    if os.path.isdir(target_root):
-        shutil.rmtree(target_root)
-    os.makedirs(target_root, exist_ok=True)
-
-    for root, _, files in os.walk(source_root):
-        for filename in files:
-            extension = os.path.splitext(filename)[1].lower()
-            if extension not in supported_extensions:
-                continue
-
-            source_count += 1
-            source_path = os.path.join(root, filename)
-            relative_sub_path = os.path.relpath(source_path, source_root)
-            target_path = os.path.join(target_root, relative_sub_path)
-            target_parent = os.path.dirname(target_path)
-            if target_parent:
-                os.makedirs(target_parent, exist_ok=True)
-            shutil.copy2(source_path, target_path)
-            copied_count += 1
-
-    return {
-        "source_count": source_count,
-        "copied_count": copied_count,
-        "target_root": target_root,
-    }
-
-
 def _collect_illustration_files(file_list_for_search, extension):
     suffix = f".{extension.lower()}"
     return [
@@ -186,13 +140,6 @@ def generate_site_resources():
             print(f"  - 已部署: {source_path} -> {target_path}")
         else:
             print(f"  - 警告: 静态文件 {source_path} 不存在，跳过。")
-
-    # 2.5 物理落地 lilith/ill（仅 webp/avif）
-    print("\n[Step 2.5] 正在落地 lilith/ill 实体目录...")
-    lilith_meta = materialize_lilith_illustration_variants(OUTPUT_DIR)
-    print(
-        f"  - 源文件数: {lilith_meta['source_count']}，已写入: {lilith_meta['copied_count']} -> {lilith_meta['target_root']}"
-    )
 
     # 3. 生成 files.json
     print("\n[Step 3] 正在生成文件索引 (files.json)...")
