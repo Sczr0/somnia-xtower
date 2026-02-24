@@ -3,6 +3,7 @@ import json
 import shutil
 import hashlib
 import random
+import math
 from itertools import cycle
 
 # === 配置区域 ===
@@ -50,6 +51,121 @@ def copy_missing_files(source_dir, target_dir):
 
     return copied_count, skipped_count
 
+
+def materialize_lilith_illustration_variants(output_dir):
+    """
+    将曲绘原图的 webp/avif 复制到物理目录 output/lilith/ill。
+    """
+    source_root = os.path.join(output_dir, "illustration")
+    target_root = os.path.join(output_dir, "lilith", "ill")
+    copied_count = 0
+    source_count = 0
+    supported_extensions = {".webp", ".avif"}
+
+    if not os.path.isdir(source_root):
+        return {
+            "source_count": 0,
+            "copied_count": 0,
+            "target_root": target_root,
+        }
+
+    # 每次重建，避免遗留旧版本文件。
+    if os.path.isdir(target_root):
+        shutil.rmtree(target_root)
+    os.makedirs(target_root, exist_ok=True)
+
+    for root, _, files in os.walk(source_root):
+        for filename in files:
+            extension = os.path.splitext(filename)[1].lower()
+            if extension not in supported_extensions:
+                continue
+
+            source_count += 1
+            source_path = os.path.join(root, filename)
+            relative_sub_path = os.path.relpath(source_path, source_root)
+            target_path = os.path.join(target_root, relative_sub_path)
+            target_parent = os.path.dirname(target_path)
+            if target_parent:
+                os.makedirs(target_parent, exist_ok=True)
+            shutil.copy2(source_path, target_path)
+            copied_count += 1
+
+    return {
+        "source_count": source_count,
+        "copied_count": copied_count,
+        "target_root": target_root,
+    }
+
+
+def _collect_illustration_files(file_list_for_search, extension):
+    suffix = f".{extension.lower()}"
+    return [
+        path for path in file_list_for_search
+        if path.startswith("illustration/") and path.lower().endswith(suffix)
+    ]
+
+
+def _build_group_redirect_rules(
+    source_files,
+    group_prefix,
+    request_extension,
+    hash_length=2,
+    min_groups=2,
+    fixed_num_groups=None,
+    rng=None,
+):
+    files = list(source_files)
+    if not files:
+        return [], 0, 0
+
+    rng = rng or random
+    rng.shuffle(files)
+
+    capacity_per_group = 16 ** hash_length
+    num_groups = fixed_num_groups
+    if num_groups is None:
+        num_groups = math.ceil(len(files) / capacity_per_group)
+    num_groups = max(min_groups, num_groups)
+
+    img_iterator = cycle(files)
+    rules = []
+    for group_id in range(1, num_groups + 1):
+        group_entry_prefix = f"{group_prefix}/{group_id}"
+        for i in range(capacity_per_group):
+            hex_name = f"{i:0{hash_length}x}"
+            target = next(img_iterator)
+            virtual_path = f"{group_entry_prefix}/{hex_name}.{request_extension}"
+            rules.append(f"{virtual_path} /{target} 200")
+
+    return rules, num_groups, capacity_per_group
+
+
+def build_illustration_redirect_rules(file_list_for_search, hash_length=2, min_groups=2, rng=None):
+    illustration_png_files = _collect_illustration_files(file_list_for_search, "png")
+    if not illustration_png_files:
+        return [], {}
+
+    new_rules = []
+    ill_rules, num_groups, capacity_per_group = _build_group_redirect_rules(
+        illustration_png_files,
+        "/ill",
+        "jpg",
+        hash_length=hash_length,
+        min_groups=min_groups,
+        rng=rng,
+    )
+    new_rules.append(
+        f"\n# === Auto-generated illustration redirects ({len(illustration_png_files)} png files, {num_groups} groups) ==="
+    )
+    new_rules.extend(ill_rules)
+
+    return new_rules, {
+        "png_count": len(illustration_png_files),
+        "num_groups": num_groups,
+        "capacity_per_group": capacity_per_group,
+    }
+
+
 def generate_site_resources():
     print("--- 开始生成网站索引与静态文件 ---")
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -71,6 +187,13 @@ def generate_site_resources():
         else:
             print(f"  - 警告: 静态文件 {source_path} 不存在，跳过。")
 
+    # 2.5 物理落地 lilith/ill（仅 webp/avif）
+    print("\n[Step 2.5] 正在落地 lilith/ill 实体目录...")
+    lilith_meta = materialize_lilith_illustration_variants(OUTPUT_DIR)
+    print(
+        f"  - 源文件数: {lilith_meta['source_count']}，已写入: {lilith_meta['copied_count']} -> {lilith_meta['target_root']}"
+    )
+
     # 3. 生成 files.json
     print("\n[Step 3] 正在生成文件索引 (files.json)...")
     file_list_for_search = []
@@ -91,67 +214,40 @@ def generate_site_resources():
         json.dump(file_list_for_search, f, ensure_ascii=False)
     print(f"已生成搜索索引: {json_path} (共 {len(file_list_for_search)} 个资源条目)")
 
-    # 2.5 生成 illustration 虚拟入口
+    # 3.5 生成 illustration 虚拟入口
     print("\n正在生成 illustration 虚拟入口 (_redirects)...")
-    # 筛选 illustration/ 开头的文件
-    illustration_files = [f for f in file_list_for_search if f.startswith("illustration/")]
-    
-    if illustration_files:
-        # 配置
-        HASH_LENGTH = 2
-        
-        # 256 (00-ff) per group
-        VIRTUAL_CAPACITY_PER_GROUP = 16 ** HASH_LENGTH 
-        
-        # 打乱图片顺序
-        random.shuffle(illustration_files)
-        
-        # 计算需要多少个分组才能装下所有图片
-        # 例如: 298 张图 / 256 = 1.16 -> 需要 2 个组
-        import math
-        num_groups = math.ceil(len(illustration_files) / VIRTUAL_CAPACITY_PER_GROUP)
-        
-        # 为了冗余和未来扩展，至少保证生成2个组 (512容量)
-        # 如果图片非常少，也会生成两个组，只是会有重复
-        if num_groups < 2:
-            num_groups = 2
-            
-        print(f"  - 找到 {len(illustration_files)} 个插画文件")
-        print(f"  - 将生成 {num_groups} 个分组 (每组 {VIRTUAL_CAPACITY_PER_GROUP} 个入口)，总容量 {num_groups * VIRTUAL_CAPACITY_PER_GROUP}")
-        
-        img_iterator = cycle(illustration_files)
-        new_rules = []
-        new_rules.append(f"\n# === Auto-generated illustration redirects ({len(illustration_files)} files, {num_groups} groups) ===")
-        
-        for group_id in range(1, num_groups + 1):
-            # 比如 /ill/1, /ill/2
-            group_prefix = f"/ill/{group_id}"
-            
-            for i in range(VIRTUAL_CAPACITY_PER_GROUP):
-                hex_name = f"{i:0{HASH_LENGTH}x}"
-                target = next(img_iterator)
-                
-                # 规则: /ill/1/00.jpg -> /illustration/a.png
-                virtual_path = f"{group_prefix}/{hex_name}.jpg"
-                new_rules.append(f"{virtual_path} /{target} 200")
-                
+    new_rules, redirect_meta = build_illustration_redirect_rules(file_list_for_search)
+
+    if new_rules:
+        print(f"  - 找到 {redirect_meta['png_count']} 个 png 曲绘文件")
+        print(
+            f"  - 将生成 {redirect_meta['num_groups']} 个分组 (每组 {redirect_meta['capacity_per_group']} 个入口)"
+        )
         redirects_path = os.path.join(OUTPUT_DIR, "_redirects")
-        
+
         # 读取现有内容 (如果有)
         existing_content = ""
         if os.path.exists(redirects_path):
             with open(redirects_path, "r", encoding="utf-8") as f:
                 existing_content = f.read()
-        
+            filtered_lines = []
+            for line in existing_content.splitlines():
+                if "/lilith/ill/" in line:
+                    continue
+                if "Auto-generated lilith illustration redirects" in line:
+                    continue
+                filtered_lines.append(line)
+            existing_content = "\n".join(filtered_lines).rstrip()
+
         # 写入合并后的内容
         with open(redirects_path, "w", encoding="utf-8") as f:
             if existing_content:
                 f.write(existing_content + "\n")
             f.write("\n".join(new_rules))
-            
+
         print(f"  - 已更新 _redirects 文件")
     else:
-        print("  - 未找到 illustration/ 目录下的文件，跳过虚拟入口生成。")
+        print("  - 未找到 illustration/*.png，跳过虚拟入口生成。")
 
     # 3. 生成校验和文件
     print(f"\n正在生成终极校验和文件 ({CHECKSUM_FILENAME})...")

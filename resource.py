@@ -12,6 +12,7 @@ from zipfile import ZipFile
 from UnityPy import Environment
 from UnityPy.classes import AudioClip, Sprite
 from UnityPy.enums import ClassIDType
+from image_export import iter_image_variant_payloads, resolve_export_formats
 
 try:
     from fsb5 import FSB5
@@ -32,6 +33,29 @@ CONFIG = {
 # ---------------- 全局变量 ----------------
 queue_in = Queue()
 OUTPUT_ROOT = "output"
+AVATAR_IMAGE_EXPORT_FORMATS = ("png",)
+DEFAULT_ILLUSTRATION_IMAGE_EXPORT_FORMATS = ("png", "webp", "avif")
+ILLUSTRATION_IMAGE_EXPORT_FORMATS = DEFAULT_ILLUSTRATION_IMAGE_EXPORT_FORMATS
+
+
+def resolve_illustration_export_formats(raw_formats=None, support_checker=None, logger=print):
+    """
+    仅解析曲绘原图的导出格式，确保实验格式只作用于 illustration 目录。
+    """
+    raw_value = raw_formats
+    if raw_value is None:
+        raw_value = os.environ.get("RESOURCE_ILLUSTRATION_FORMATS")
+    if raw_value is None:
+        # 兼容历史变量，避免已有环境配置失效。
+        raw_value = os.environ.get("RESOURCE_IMAGE_FORMATS")
+    return tuple(
+        resolve_export_formats(
+            raw_formats=raw_value,
+            default_formats=DEFAULT_ILLUSTRATION_IMAGE_EXPORT_FORMATS,
+            support_checker=support_checker,
+            logger=logger,
+        )
+    )
 
 # ---------------- 工具类与函数 ----------------
 class ByteReader:
@@ -125,10 +149,13 @@ def process_object(key, obj, avatar_map):
         real_key = key[7:]
         if real_key != "Cipher1" and real_key in avatar_map:
             real_key = avatar_map[real_key]
-        
-        bytesIO = BytesIO()
-        obj.image.save(bytesIO, "png")
-        queue_in.put((f"avatar/{real_key}.png", bytesIO))
+
+        for rel_path, payload in iter_image_variant_payloads(
+            obj.image,
+            f"avatar/{real_key}",
+            AVATAR_IMAGE_EXPORT_FORMATS,
+        ):
+            queue_in.put((rel_path, payload))
 
     # 2. 谱面 json
     elif CONFIG["chart"] and "/Chart_" in key and key.endswith(".json") and obj_type == "TextAsset":
@@ -156,11 +183,14 @@ def process_object(key, obj, avatar_map):
             if subfolder:
                 parts = key.replace("\\", "/").split("/")
                 song_id = parts[-2].replace(".0", "")
-                rel_path = f"{subfolder}/{song_id}.png"
-                
-                bytesIO = BytesIO()
-                obj.image.save(bytesIO, "png")
-                queue_in.put((rel_path, bytesIO))
+                export_formats = ILLUSTRATION_IMAGE_EXPORT_FORMATS if subfolder == "illustration" else AVATAR_IMAGE_EXPORT_FORMATS
+
+                for rel_path, payload in iter_image_variant_payloads(
+                    obj.image,
+                    f"{subfolder}/{song_id}",
+                    export_formats,
+                ):
+                    queue_in.put((rel_path, payload))
 
         except Exception as e:
             print(f"处理曲绘失败: {key}, 错误: {e}")
@@ -182,9 +212,14 @@ def process_object(key, obj, avatar_map):
             print(f"音频解码失败 {key}: {e}")
 
 def extract_resources(apk_path, output_dir="output"):
-    global OUTPUT_ROOT, queue_in
+    global OUTPUT_ROOT, queue_in, ILLUSTRATION_IMAGE_EXPORT_FORMATS
     OUTPUT_ROOT = output_dir
     print(f"--- 开始提取资源文件 (Music/Image/Chart) ---", flush=True)
+    ILLUSTRATION_IMAGE_EXPORT_FORMATS = resolve_illustration_export_formats()
+    print(
+        f"[image_export] 曲绘原图导出格式: {', '.join(ILLUSTRATION_IMAGE_EXPORT_FORMATS)}",
+        flush=True,
+    )
 
     cpu_count = os.cpu_count() or 2
     max_workers = _get_int_env("RESOURCE_WORKERS", min(4, cpu_count), min_value=1, max_value=16)
