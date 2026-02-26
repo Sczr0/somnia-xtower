@@ -37,6 +37,7 @@ AVATAR_IMAGE_EXPORT_FORMATS = ("png",)
 DEFAULT_ILLUSTRATION_IMAGE_EXPORT_FORMATS = ("png", "webp", "avif")
 ILLUSTRATION_IMAGE_EXPORT_FORMATS = ("png",)
 LILITH_ILL_EXPORT_FORMATS = ("webp", "avif")
+LILITH_ILL_LOW_EXPORT_FORMATS = ("webp", "avif")
 
 
 def resolve_illustration_export_formats(raw_formats=None, support_checker=None, logger=print):
@@ -62,6 +63,18 @@ def resolve_illustration_export_formats(raw_formats=None, support_checker=None, 
 def resolve_lilith_ill_export_formats(raw_formats=None, support_checker=None, logger=print):
     """
     解析 lilith/ill 的实验格式，显式排除 png，避免在 illustration 存重复副本。
+    """
+    resolved_with_png = resolve_illustration_export_formats(
+        raw_formats=raw_formats,
+        support_checker=support_checker,
+        logger=logger,
+    )
+    return tuple(fmt for fmt in resolved_with_png if fmt != "png")
+
+
+def resolve_lilith_ill_low_export_formats(raw_formats=None, support_checker=None, logger=print):
+    """
+    瑙ｆ瀽 lilith/illLow 鐨勫疄楠屾牸寮忥紝鏄惧紡鎺掗櫎 png锛岄伩鍏嶄笌 illustrationLowRes 鐩綍閲嶅銆?
     """
     resolved_with_png = resolve_illustration_export_formats(
         raw_formats=raw_formats,
@@ -210,6 +223,20 @@ def process_object(key, obj, avatar_map):
                         LILITH_ILL_EXPORT_FORMATS,
                     ):
                         queue_in.put((rel_path, payload))
+                elif subfolder == "illustrationLowRes":
+                    for rel_path, payload in iter_image_variant_payloads(
+                        obj.image,
+                        f"illustrationLowRes/{song_id}",
+                        AVATAR_IMAGE_EXPORT_FORMATS,
+                    ):
+                        queue_in.put((rel_path, payload))
+
+                    for rel_path, payload in iter_image_variant_payloads(
+                        obj.image,
+                        f"lilith/illLow/{song_id}",
+                        LILITH_ILL_LOW_EXPORT_FORMATS,
+                    ):
+                        queue_in.put((rel_path, payload))
                 else:
                     for rel_path, payload in iter_image_variant_payloads(
                         obj.image,
@@ -238,11 +265,12 @@ def process_object(key, obj, avatar_map):
             print(f"音频解码失败 {key}: {e}")
 
 def extract_resources(apk_path, output_dir="output"):
-    global OUTPUT_ROOT, queue_in, ILLUSTRATION_IMAGE_EXPORT_FORMATS, LILITH_ILL_EXPORT_FORMATS
+    global OUTPUT_ROOT, queue_in, ILLUSTRATION_IMAGE_EXPORT_FORMATS, LILITH_ILL_EXPORT_FORMATS, LILITH_ILL_LOW_EXPORT_FORMATS
     OUTPUT_ROOT = output_dir
     print(f"--- 开始提取资源文件 (Music/Image/Chart) ---", flush=True)
     ILLUSTRATION_IMAGE_EXPORT_FORMATS = ("png",)
     LILITH_ILL_EXPORT_FORMATS = resolve_lilith_ill_export_formats()
+    LILITH_ILL_LOW_EXPORT_FORMATS = resolve_lilith_ill_low_export_formats()
     print(
         f"[image_export] 曲绘原图导出格式: {', '.join(ILLUSTRATION_IMAGE_EXPORT_FORMATS)}",
         flush=True,

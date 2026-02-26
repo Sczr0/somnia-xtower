@@ -1,6 +1,10 @@
 import unittest
 
-from resource import resolve_illustration_export_formats, resolve_lilith_ill_export_formats
+from resource import (
+    resolve_illustration_export_formats,
+    resolve_lilith_ill_export_formats,
+    resolve_lilith_ill_low_export_formats,
+)
 
 
 class ResolveIllustrationExportFormatsTests(unittest.TestCase):
@@ -48,6 +52,32 @@ class ResolveLilithIllExportFormatsTests(unittest.TestCase):
 
     def test_explicit_png_input_will_not_produce_lilith_variant(self):
         resolved = resolve_lilith_ill_export_formats(
+            raw_formats="png",
+            support_checker=lambda _fmt: True,
+            logger=None,
+        )
+        self.assertEqual(resolved, ())
+
+
+class ResolveLilithIllLowExportFormatsTests(unittest.TestCase):
+    def test_default_formats_exclude_png(self):
+        resolved = resolve_lilith_ill_low_export_formats(
+            raw_formats=None,
+            support_checker=lambda _fmt: True,
+            logger=None,
+        )
+        self.assertEqual(resolved, ("webp", "avif"))
+
+    def test_fallback_to_empty_when_only_png_available(self):
+        resolved = resolve_lilith_ill_low_export_formats(
+            raw_formats=None,
+            support_checker=lambda fmt: fmt == "png",
+            logger=None,
+        )
+        self.assertEqual(resolved, ())
+
+    def test_explicit_png_input_will_not_produce_lilith_low_variant(self):
+        resolved = resolve_lilith_ill_low_export_formats(
             raw_formats="png",
             support_checker=lambda _fmt: True,
             logger=None,
