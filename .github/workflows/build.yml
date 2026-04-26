@@ -130,7 +130,6 @@ jobs:
           CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
         run: |
           git clone --depth=1 "https://cnb:${CNB_TOKEN}@cnb.cool/r-0semi/asset-xtower.git" /tmp/cnb-repo
-          rm -rf /tmp/cnb-repo/*
           cp -r output/* /tmp/cnb-repo/
           cd /tmp/cnb-repo
           git config user.name "r-0semi"
