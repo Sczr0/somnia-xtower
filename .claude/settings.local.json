@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__open-websearch__fetchWebContent",
+      "mcp__open-websearch__search"
+    ]
+  }
+}

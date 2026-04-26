@@ -123,3 +123,18 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy ./output --project-name=somnia-asset --commit-dirty=true
+
+      # 7. 推送 output 到 CNB 仓库
+      - name: Push to CNB Repository
+        env:
+          CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
+        run: |
+          git clone --depth=1 "https://cnb:${CNB_TOKEN}@cnb.cool/r-0semi/asset-xtower.git" /tmp/cnb-repo
+          rm -rf /tmp/cnb-repo/*
+          cp -r output/* /tmp/cnb-repo/
+          cd /tmp/cnb-repo
+          git config user.name "r-0semi"
+          git config user.email "sczr0710@163.com"
+          git add -A
+          git commit -m "Update assets" || echo "No changes to commit"
+          git push origin main
