@@ -14,3 +14,7 @@ __pycache__/
 
 # 忽略 Node 依赖
 node_modules/
+
+# 忽略 Claude Code 和 Spec Workflow 本地配置
+.claude/
+.spec-workflow/
