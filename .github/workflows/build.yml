@@ -136,4 +136,4 @@ jobs:
           git config user.email "sczr0710@163.com"
           git add -A
           git commit -m "Update assets" || echo "No changes to commit"
-          git push origin main
+          git push
