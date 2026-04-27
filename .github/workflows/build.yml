@@ -134,6 +134,18 @@ jobs:
           cd /tmp/cnb-repo
           git config user.name "r-0semi"
           git config user.email "sczr0710@163.com"
+          # 增大 HTTP buffer，避免大文件推送时 502
+          git config http.postBuffer 524288000
           git add -A
           git commit -m "Update assets" || echo "No changes to commit"
-          git push
+          # 重试最多 3 次，应对 502 瞬时错误
+          for i in 1 2 3; do
+            if git push; then
+              echo "Push succeeded on attempt $i"
+              exit 0
+            fi
+            echo "Push attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+          echo "Push failed after 3 attempts"
+          exit 1
