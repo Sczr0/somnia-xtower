@@ -16,20 +16,19 @@ main:
             apt-get update -qq
             apt-get install -y -qq --no-install-recommends aria2 python3
 
-        # 2. 克隆 PhiInfo 源码并编译 (无预编译 Release, 从源码构建, 禁用 AOT)
+        # 2. 克隆 PhiInfo 源码并编译
         - name: Build PhiInfo
           script: |
             git clone --depth=1 https://github.com/PhigrosLabs/PhiInfo.git /tmp/phiinfo
-            dotnet publish /tmp/phiinfo/src/PhiInfo.CLI -c Release -o /usr/local/phiinfo -p:PublishAot=false -p:SelfContained=false
-            ln -s /usr/local/phiinfo/PhiInfo.CLI /usr/local/bin/PhiInfo.CLI
+            dotnet build /tmp/phiinfo/src/PhiInfo.CLI -c Release
 
         # 3. 下载 APK
         - name: Download APK
           script: aria2c -x16 "$APK_DOWNLOAD_URL" -o game.apk
 
-        # 4. PhiInfo 导出所有资源 (--image-format PNG 保持与站点兼容)
+        # 4. PhiInfo 导出所有资源
         - name: PhiInfo Export
-          script: PhiInfo.CLI -p game.apk --image-format PNG export -o output
+          script: dotnet /tmp/phiinfo/src/PhiInfo.CLI/bin/Release/net10.0/linux-x64/PhiInfo.CLI.dll -p game.apk --image-format PNG export -o output
 
         # 5. 翻译目录结构 + 生成 TSV (适配 generate_index 和 phira)
         - name: Translate Output
