@@ -98,18 +98,33 @@ def translate_info():
         composer = song.get("composer", "")
         illustrator = song.get("illustrator", "")
 
-        levels = song.get("levels", [])
+        levels = song.get("levels", {})
         charters = []
         diffs = []
-        if levels and isinstance(levels[0], str):
-            # 新版 songs.json：levels 是字符串数组，charter/difficulty 在其他字段
+        charter_map = song.get("charters", {})
+        diff_map = song.get("difficulty", {})
+
+        if isinstance(levels, dict):
+            # levels = {"EZ": ..., "HD": ..., "IN": ..., "AT": ...}
+            for lv_name in LEVELS:
+                lv_data = levels.get(lv_name)
+                if isinstance(lv_data, dict):
+                    charters.append(str(lv_data.get("charter", "")))
+                    diffs.append(str(lv_data.get("difficulty", "")))
+                elif lv_name in levels:
+                    # value is a number (difficulty), charter from separate map
+                    charters.append(str(charter_map.get(lv_name, "")))
+                    diffs.append(str(lv_data))
+                else:
+                    charters.append("")
+                    diffs.append("")
+        elif isinstance(levels, list) and levels and isinstance(levels[0], str):
             song_charters = song.get("charters", [])
             song_diffs = song.get("difficulty", [])
             for i in range(len(levels)):
                 charters.append(str(song_charters[i]) if i < len(song_charters) else "")
                 diffs.append(str(song_diffs[i]) if i < len(song_diffs) else "")
         else:
-            # 旧版/字典格式
             for lv in levels:
                 charters.append(str(lv.get("charter", "") or ""))
                 diffs.append(str(lv.get("difficulty", "")))
