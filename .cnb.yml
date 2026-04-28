@@ -30,8 +30,6 @@ main:
             wget -q https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh
             chmod +x /tmp/dotnet-install.sh
             /tmp/dotnet-install.sh --channel 10.0
-            echo "DOTNET_ROOT=$HOME/.dotnet" >> $CNB_BUILD_ENV
-            echo "PATH=$HOME/.dotnet:$PATH" >> $CNB_BUILD_ENV
 
         # 4. 运行主构建脚本 (下载APK → 解包 → 提取资源)
         - name: Build Assets
