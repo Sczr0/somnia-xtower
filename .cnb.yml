@@ -4,29 +4,25 @@
 main:
   push:
     - docker:
-        image: ubuntu:latest
+        # Python 官方镜像，预装 Python + tzdata，避免 ubuntu:latest 的 tzdata 安装冲突
+        image: python:3.10
       runner:
         tags: cnb:arch:amd64
         cpus: 8
       env:
         SKIP_INDEX_GENERATION: "1"
       stages:
-        # 1. 安装系统依赖 (使用阿里云镜像加速)
+        # 1. 安装系统工具 (Python 已预装，只需装额外依赖)
         - name: Install System Tools
           script: |
-            echo 'tzdata tzdata/Areas select Asia' | debconf-set-selections
-            echo 'tzdata tzdata/Zones select Shanghai' | debconf-set-selections
-            sed -i 's|http://.*archive.ubuntu.com|http://mirrors.aliyun.com|g' /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || \
-            sed -i 's|http://.*archive.ubuntu.com|http://mirrors.aliyun.com|g' /etc/apt/sources.list
-            export DEBIAN_FRONTEND=noninteractive
+            sed -i 's|http://deb.debian.org|http://mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
+            sed -i 's|http://deb.debian.org|http://mirrors.aliyun.com|g' /etc/apt/sources.list
             apt-get update -qq
-            apt-get install -y -qq --no-install-recommends aria2 libvorbis-dev libogg-dev python3 python3-pip python3-venv git wget npm
+            apt-get install -y -qq --no-install-recommends aria2 libvorbis-dev libogg-dev git wget npm
 
         # 2. 安装 Python 依赖
         - name: Install Python Dependencies
-          script: |
-            python3 -m pip install --upgrade pip
-            pip3 install -r requirements.txt
+          script: pip install -r requirements.txt
 
         # 3. 安装 .NET 10 (PhiInfo.CLI 运行时)
         - name: Install .NET 10
@@ -42,7 +38,7 @@ main:
           script: |
             export PATH="$HOME/.dotnet:$PATH"
             export DOTNET_ROOT="$HOME/.dotnet"
-            python3 main.py
+            python main.py
 
         # 5. PhiInfo 额外信息提取
         - name: Extract PhiInfo
@@ -64,7 +60,7 @@ main:
 
         # 7. 生成资源索引
         - name: Generate Index
-          script: python3 -c "import generate_index; generate_index.generate_site_resources()"
+          script: python -c "import generate_index; generate_index.generate_site_resources()"
 
         # 9. 推送产物到 asset-xtower (CNB 内网，无超时风险)
         - name: Push to asset-xtower
