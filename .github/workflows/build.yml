@@ -124,23 +124,29 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy ./output --project-name=somnia-asset --commit-dirty=true
 
-      # 7. 推送 output 到 CNB 仓库
+      # 7. 推送 output 到 CNB 仓库 (不 clone 旧仓库，直接 init 裸推)
       - name: Push to CNB Repository
         env:
           CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
         run: |
-          git clone --depth=1 "https://cnb:${CNB_TOKEN}@cnb.cool/r-0semi/asset-xtower.git" /tmp/cnb-repo
-          cp -r output/* /tmp/cnb-repo/
-          cd /tmp/cnb-repo
+          mkdir -p /tmp/cnb-push
+          cp -r output/* /tmp/cnb-push/
+          cd /tmp/cnb-push
+          git init
           git config user.name "r-0semi"
           git config user.email "sczr0710@163.com"
-          # 增大 HTTP buffer，避免大文件推送时 502
           git config http.postBuffer 524288000
+          git config http.lowSpeedLimit 1024
+          git config http.lowSpeedTime 120
           git add -A
-          git commit -m "Update assets" || echo "No changes to commit"
-          # 重试最多 3 次，应对 502 瞬时错误
+          git commit -m "Update assets"
+          git remote add origin "https://cnb:${CNB_TOKEN}@cnb.cool/r-0semi/asset-xtower.git"
+          # 检出远程默认分支名，确保 force push 到正确分支
+          BRANCH="$(git ls-remote --symref origin HEAD | head -1 | awk '{print $2}' | sed 's|refs/heads/||')"
+          BRANCH="${BRANCH:-main}"
+          echo "Pushing to branch: ${BRANCH}"
           for i in 1 2 3; do
-            if git push; then
+            if GIT_TRACE=0 git push -u origin "${BRANCH}" --force; then
               echo "Push succeeded on attempt $i"
               exit 0
             fi
