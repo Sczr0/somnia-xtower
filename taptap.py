@@ -20,16 +20,44 @@ def _build_ua(uid):
     )
 
 
+def _api_get(host, path, headers=None):
+    """封装 GET 请求，含容错输出。"""
+    import sys
+    conn = HTTPSConnection(host, timeout=15)
+    conn.request("GET", path, headers=headers or {})
+    resp = conn.getresponse()
+    body = resp.read().decode()
+    if resp.status != 200:
+        print(f"[taptap] GET {host}{path} → HTTP {resp.status}", file=sys.stderr)
+        print(f"[taptap] body: {body[:300]}", file=sys.stderr)
+        raise RuntimeError(f"HTTP {resp.status}")
+    return json.loads(body)
+
+
+def _api_post(host, path, body, headers=None):
+    """封装 POST 请求，含容错输出。"""
+    import sys
+    conn = HTTPSConnection(host, timeout=15)
+    conn.request("POST", path, body=body.encode(), headers=headers or {})
+    resp = conn.getresponse()
+    resp_body = resp.read().decode()
+    if resp.status != 200:
+        print(f"[taptap] POST {host}{path} → HTTP {resp.status}", file=sys.stderr)
+        print(f"[taptap] body: {resp_body[:300]}", file=sys.stderr)
+        raise RuntimeError(f"HTTP {resp.status}")
+    return json.loads(resp_body)
+
+
 def get_latest_apk(app_id=PHIGROS_APP_ID):
     """返回最新 APK 的下载信息 dict。"""
     uid = uuid.uuid4()
     x_ua = _build_ua(uid)
+    host = "api.taptapdada.com"
+    headers = {"User-Agent": "okhttp/3.12.1"}
 
     # 第一步：获取游戏详情 → 拿到 apk_id
-    conn = HTTPSConnection("api.taptapdada.com")
-    path = f"/app/v2/detail-by-id/{app_id}?X-UA={urllib.parse.quote(x_ua)}"
-    conn.request("GET", path, headers={"User-Agent": "okhttp/3.12.1"})
-    detail = json.load(conn.getresponse())
+    path1 = f"/app/v2/detail-by-id/{app_id}?X-UA={urllib.parse.quote(x_ua)}"
+    detail = _api_get(host, path1, headers)
     apk_id = detail["data"]["download"]["apk_id"]
 
     # 第二步：获取 APK 具体信息（含下载链接）
@@ -42,18 +70,14 @@ def get_latest_apk(app_id=PHIGROS_APP_ID):
     )
     sign_data = f"X-UA={x_ua}&{param}PeCkE6Fu0B10Vm9BKfPfANwCUAn5POcs"
     sign = hashlib.md5(sign_data.encode()).hexdigest()
-    body = f"{param}&sign={sign}"
+    post_body = f"{param}&sign={sign}"
 
     path2 = f"/apk/v1/detail?X-UA={urllib.parse.quote(x_ua)}"
-    conn.request(
-        "POST", path2,
-        body=body.encode(),
-        headers={
-            "Content-Type": "application/x-www-form-urlencoded",
-            "User-Agent": "okhttp/3.12.1",
-        },
-    )
-    apk_info = json.load(conn.getresponse())
+    post_headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "okhttp/3.12.1",
+    }
+    apk_info = _api_post(host, path2, post_body, post_headers)
 
     data = apk_info["data"]
     apk = data["apk"]
