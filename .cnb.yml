@@ -7,7 +7,7 @@ main:
     - docker:
         image: python:3.10
       # 引用密钥仓库中的 Token，注入为环境变量
-      imports: https://cnb.cool/r-0semi/secrets/-/blob/main/env.yml
+      imports: https://cnb.cool/r-0semi/secrets-xtower/-/blob/main/env.yml
       runner:
         tags: cnb:arch:amd64
         cpus: 8
