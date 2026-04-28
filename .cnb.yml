@@ -14,9 +14,8 @@ main:
         # 1. 安装系统依赖 (使用阿里云镜像加速)
         - name: Install System Tools
           script: |
-            export TZ=Asia/Shanghai
-            ln -snf /usr/share/zoneinfo/$TZ /etc/localtime
-            echo $TZ > /etc/timezone
+            echo 'tzdata tzdata/Areas select Asia' | debconf-set-selections
+            echo 'tzdata tzdata/Zones select Shanghai' | debconf-set-selections
             sed -i 's|http://.*archive.ubuntu.com|http://mirrors.aliyun.com|g' /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || \
             sed -i 's|http://.*archive.ubuntu.com|http://mirrors.aliyun.com|g' /etc/apt/sources.list
             export DEBIAN_FRONTEND=noninteractive
