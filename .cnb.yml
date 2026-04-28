@@ -1,0 +1,81 @@
+# CNB 构建流水线
+# 仓库: r-0semi/somnia-xtower (源码)
+# 产物: r-0semi/asset-xtower (资源站)
+main:
+  push:
+    - docker:
+        image: ubuntu:latest
+      runner:
+        tags: cnb:arch:amd64
+        cpus: 8
+      env:
+        SKIP_INDEX_GENERATION: "1"
+      stages:
+        # 1. 安装系统依赖
+        - name: Install System Tools
+          script: |
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y -qq aria2 libvorbis-dev libogg-dev python3 python3-pip python3-venv git wget npm
+
+        # 2. 安装 Python 依赖
+        - name: Install Python Dependencies
+          script: |
+            python3 -m pip install --upgrade pip
+            pip3 install -r requirements.txt
+
+        # 3. 安装 .NET 10 (PhiInfo.CLI 运行时)
+        - name: Install .NET 10
+          script: |
+            wget -q https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh
+            chmod +x /tmp/dotnet-install.sh
+            /tmp/dotnet-install.sh --channel 10.0
+            echo "DOTNET_ROOT=$HOME/.dotnet" >> $CNB_BUILD_ENV
+            echo "PATH=$HOME/.dotnet:$PATH" >> $CNB_BUILD_ENV
+
+        # 4. 运行主构建脚本 (下载APK → 解包 → 提取资源)
+        - name: Build Assets
+          script: |
+            export PATH="$HOME/.dotnet:$PATH"
+            export DOTNET_ROOT="$HOME/.dotnet"
+            python3 main.py
+
+        # 5. PhiInfo 额外信息提取
+        - name: Extract PhiInfo
+          script: |
+            export PATH="$HOME/.dotnet:$PATH"
+            export DOTNET_ROOT="$HOME/.dotnet"
+            dotnet PhiInfo.CLI/PhiInfo.CLI.dll game.apk false
+            mkdir -p output/info
+            mv output/all_info.json output/info/ 2>/dev/null || true
+
+        # 6. 生成版本文件
+        - name: Generate Version
+          script: |
+            mkdir -p output/info
+            VERSION_NAME="${VERSION_NAME:-unknown}"
+            VERSION_CODE="${VERSION_CODE:-0}"
+            printf '%s\n' "${VERSION_NAME} (${VERSION_CODE})" > output/info/version.txt
+            echo "Version: ${VERSION_NAME} (${VERSION_CODE})"
+
+        # 7. 生成资源索引
+        - name: Generate Index
+          script: python3 -c "import generate_index; generate_index.generate_site_resources()"
+
+        # 8. 部署到 Cloudflare Pages
+        - name: Deploy to Cloudflare Pages
+          script: |
+            npm install -g wrangler
+            npx wrangler pages deploy ./output --project-name=somnia-asset --commit-dirty=true
+
+        # 9. 推送产物到 asset-xtower (CNB 内网，无超时风险)
+        - name: Push to asset-xtower
+          script: |
+            git clone --depth=1 "https://cnb:${CNB_TOKEN}@cnb.cool/r-0semi/asset-xtower.git" /tmp/asset-repo
+            cp -r output/* /tmp/asset-repo/
+            cd /tmp/asset-repo
+            git config user.name "r-0semi"
+            git config user.email "sczr0710@163.com"
+            git add -A
+            git commit -m "Update assets" || echo "No changes to commit"
+            git push
