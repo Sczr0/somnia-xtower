@@ -20,7 +20,7 @@ main:
         - name: Build PhiInfo
           script: |
             git clone --depth=1 https://github.com/PhigrosLabs/PhiInfo.git /tmp/phiinfo
-            dotnet publish /tmp/phiinfo/src/PhiInfo.CLI -c Release -o /usr/local/phiinfo -p:PublishAot=false
+            dotnet publish /tmp/phiinfo/src/PhiInfo.CLI -c Release -o /usr/local/phiinfo -p:PublishAot=false -p:SelfContained=false
             ln -s /usr/local/phiinfo/PhiInfo.CLI /usr/local/bin/PhiInfo.CLI
 
         # 3. 下载 APK
