@@ -1,56 +1,48 @@
-# CNB 构建流水线
-# 仓库: r-0semi/somnia-xtower (源码)
-# 产物: r-0semi/asset-xtower (资源站)
-# 触发方式: 页面按钮 (web_trigger) — 输入 APK 下载链接后手动触发
+# CNB 构建流水线 — PhiInfo 方案
+# 提取引擎: PhiInfo (C# + AssetsTools.NET) 替代 Python (UnityPy)
+# 仓库: r-0semi/somnia-xtower → 产物: r-0semi/asset-xtower
 main:
   web_trigger_build:
     - docker:
-        # 用 .NET SDK 镜像做底（自带 dotnet），往上装 Python（几十MB，秒装）
         image: mcr.microsoft.com/dotnet/sdk:10.0
       imports: https://cnb.cool/r-0semi/secrets-xtower/-/blob/main/env.yml
       runner:
         tags: cnb:arch:amd64
         cpus: 8
-      env:
-        SKIP_INDEX_GENERATION: "1"
       stages:
-        # 1. 安装系统工具 + Python（.NET 已自带，只装 Python 和音频编解码库）
-        - name: Install System Tools
+        # 1. 安装工具 (python3 仅用于 translate/generate_index/phira, 都是纯标准库)
+        - name: Install Tools
           script: |
             apt-get update -qq
-            apt-get install -y -qq --no-install-recommends aria2 libvorbis-dev libogg-dev git wget python3 python3-pip python3-venv
+            apt-get install -y -qq --no-install-recommends aria2 python3
 
-        # 2. 安装 Python 依赖 (Ubuntu 24.04 要求用 venv)
-        - name: Install Python Dependencies
+        # 2. 下载 PhiInfo CLI 二进制 (预编译, 免装 .NET SDK)
+        - name: Download PhiInfo
           script: |
-            python3 -m venv /opt/venv
-            /opt/venv/bin/pip install -r requirements.txt
+            wget -q https://github.com/PhigrosLabs/PhiInfo/releases/latest/download/PhiInfo.CLI-linux-x64 -O /usr/local/bin/PhiInfo.CLI
+            chmod +x /usr/local/bin/PhiInfo.CLI
 
-        # 3. 运行主构建脚本
-        - name: Build Assets
-          script: /opt/venv/bin/python main.py
+        # 3. 下载 APK
+        - name: Download APK
+          script: aria2c -x16 "$APK_DOWNLOAD_URL" -o game.apk
 
-        # 4. PhiInfo 额外信息提取
-        - name: Extract PhiInfo
-          script: |
-            dotnet PhiInfo.CLI/PhiInfo.CLI.dll game.apk false
-            mkdir -p output/info
-            mv output/all_info.json output/info/ 2>/dev/null || true
+        # 4. PhiInfo 导出所有资源 (--image-format PNG 保持与站点兼容)
+        - name: PhiInfo Export
+          script: PhiInfo.CLI -p game.apk --image-format PNG export -o output
 
-        # 5. 生成版本文件
-        - name: Generate Version
-          script: |
-            mkdir -p output/info
-            VERSION_NAME="${VERSION_NAME:-unknown}"
-            VERSION_CODE="${VERSION_CODE:-0}"
-            printf '%s\n' "${VERSION_NAME} (${VERSION_CODE})" > output/info/version.txt
-            echo "Version: ${VERSION_NAME} (${VERSION_CODE})"
+        # 5. 翻译目录结构 + 生成 TSV (适配 generate_index 和 phira)
+        - name: Translate Output
+          script: python3 translate.py
 
-        # 6. 生成资源索引
+        # 6. 生成网站索引
         - name: Generate Index
-          script: /opt/venv/bin/python -c "import generate_index; generate_index.generate_site_resources()"
+          script: python3 -c "import generate_index; generate_index.generate_site_resources()"
 
-        # 7. 推送产物到 asset-xtower (CNB 内网)
+        # 7. 打包 Phira (.pez)
+        - name: Package Phira
+          script: python3 phira.py
+
+        # 8. 推送产物到 asset-xtower
         - name: Push to asset-xtower
           script: |
             git clone --depth=1 "https://cnb:${CNB_TOKEN}@cnb.cool/r-0semi/asset-xtower.git" /tmp/asset-repo
