@@ -1,24 +1,26 @@
 # CNB 构建流水线
 # 仓库: r-0semi/somnia-xtower (源码)
 # 产物: r-0semi/asset-xtower (资源站)
+# 触发方式: 页面按钮 (web_trigger) — 输入 APK 下载链接后手动触发
 main:
-  push:
+  web_trigger_build:
     - docker:
-        # Python 官方镜像，预装 Python + tzdata，避免 ubuntu:latest 的 tzdata 安装冲突
         image: python:3.10
+      # 引用密钥仓库中的 Token，注入为环境变量
+      imports: https://cnb.cool/r-0semi/secrets/-/blob/main/env.yml
       runner:
         tags: cnb:arch:amd64
         cpus: 8
       env:
         SKIP_INDEX_GENERATION: "1"
       stages:
-        # 1. 安装系统工具 (Python 已预装，只需装额外依赖)
+        # 1. 安装系统工具
         - name: Install System Tools
           script: |
             sed -i 's|http://deb.debian.org|http://mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
             sed -i 's|http://deb.debian.org|http://mirrors.aliyun.com|g' /etc/apt/sources.list
             apt-get update -qq
-            apt-get install -y -qq --no-install-recommends aria2 libvorbis-dev libogg-dev git wget npm
+            apt-get install -y -qq --no-install-recommends aria2 libvorbis-dev libogg-dev git wget
 
         # 2. 安装 Python 依赖
         - name: Install Python Dependencies
@@ -31,7 +33,7 @@ main:
             chmod +x /tmp/dotnet-install.sh
             /tmp/dotnet-install.sh --channel 10.0
 
-        # 4. 运行主构建脚本 (下载APK → 解包 → 提取资源)
+        # 4. 运行主构建脚本
         - name: Build Assets
           script: |
             export PATH="$HOME/.dotnet:$PATH"
@@ -60,7 +62,7 @@ main:
         - name: Generate Index
           script: python -c "import generate_index; generate_index.generate_site_resources()"
 
-        # 9. 推送产物到 asset-xtower (CNB 内网，无超时风险)
+        # 8. 推送产物到 asset-xtower (CNB 内网)
         - name: Push to asset-xtower
           script: |
             git clone --depth=1 "https://cnb:${CNB_TOKEN}@cnb.cool/r-0semi/asset-xtower.git" /tmp/asset-repo

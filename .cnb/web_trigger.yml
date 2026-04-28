@@ -1,0 +1,26 @@
+branch:
+  - reg: ^main$
+    buttons:
+      - name: 构建 Phigros 资源
+        description: 输入 APK 下载链接开始构建
+        event: web_trigger_build
+        isDefault: true
+        inputs:
+          APK_DOWNLOAD_URL:
+            name: APK 下载链接
+            description: Phigros APK 直链下载地址
+            placeholder: https://example.com/phigros.apk
+            required: true
+            type: input
+          VERSION_NAME:
+            name: 版本名称 (选填)
+            description: 如 "3.12.0"
+            placeholder: 3.12.0
+            required: false
+            type: input
+          VERSION_CODE:
+            name: 版本号 (选填)
+            description: 如 "139"
+            placeholder: "139"
+            required: false
+            type: input
