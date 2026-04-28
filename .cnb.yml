@@ -62,12 +62,6 @@ main:
         - name: Generate Index
           script: python3 -c "import generate_index; generate_index.generate_site_resources()"
 
-        # 8. 部署到 Cloudflare Pages
-        - name: Deploy to Cloudflare Pages
-          script: |
-            npm install -g wrangler
-            npx wrangler pages deploy ./output --project-name=somnia-asset --commit-dirty=true
-
         # 9. 推送产物到 asset-xtower (CNB 内网，无超时风险)
         - name: Push to asset-xtower
           script: |
