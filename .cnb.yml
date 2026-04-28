@@ -16,11 +16,12 @@ main:
             apt-get update -qq
             apt-get install -y -qq --no-install-recommends aria2 python3
 
-        # 2. 下载 PhiInfo CLI 二进制 (预编译, 免装 .NET SDK)
-        - name: Download PhiInfo
+        # 2. 克隆 PhiInfo 源码并编译 (无预编译 Release, 从源码构建)
+        - name: Build PhiInfo
           script: |
-            wget -q https://github.com/PhigrosLabs/PhiInfo/releases/latest/download/PhiInfo.CLI-linux-x64 -O /usr/local/bin/PhiInfo.CLI
-            chmod +x /usr/local/bin/PhiInfo.CLI
+            git clone --depth=1 https://github.com/PhigrosLabs/PhiInfo.git /tmp/phiinfo
+            dotnet publish /tmp/phiinfo/src/PhiInfo.CLI -c Release -o /usr/local/phiinfo
+            ln -s /usr/local/phiinfo/PhiInfo.CLI /usr/local/bin/PhiInfo.CLI
 
         # 3. 下载 APK
         - name: Download APK
