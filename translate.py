@@ -101,9 +101,18 @@ def translate_info():
         levels = song.get("levels", [])
         charters = []
         diffs = []
-        for lv in levels:
-            charters.append(lv.get("charter", "") or "")
-            diffs.append(str(lv.get("difficulty", "")))
+        if levels and isinstance(levels[0], str):
+            # 新版 songs.json：levels 是字符串数组，charter/difficulty 在其他字段
+            song_charters = song.get("charters", [])
+            song_diffs = song.get("difficulty", [])
+            for i in range(len(levels)):
+                charters.append(str(song_charters[i]) if i < len(song_charters) else "")
+                diffs.append(str(song_diffs[i]) if i < len(song_diffs) else "")
+        else:
+            # 旧版/字典格式
+            for lv in levels:
+                charters.append(str(lv.get("charter", "") or ""))
+                diffs.append(str(lv.get("difficulty", "")))
 
         while len(charters) < len(LEVELS):
             charters.append("")
