@@ -38,15 +38,19 @@ def _map_asset_path(rel):
     """将一条 PhiInfo asset 路径映射为目标站点路径。"""
     # 表单后缀：PhiInfo 在所有原始 key 后加了 .txt / .ogg / .png
     if rel.endswith(".txt"):
-        orig = rel[:-4]  # 去掉 .txt，得到 Song.Author.0/Chart_EZ.json
+        orig = rel[:-4]  # 去掉 .txt，得到 Assets/Tracks/Song.Author.0/Chart_EZ.json
     elif rel.endswith(".ogg"):
-        orig = rel[:-4]  # 去掉 .ogg，得到 Song.Author.0/music.wav
+        orig = rel[:-4]  # 去掉 .ogg，得到 Assets/Tracks/Song.Author.0/music.wav
     elif rel.endswith(".png"):
-        orig = rel[:-4]  # 去掉 .png，得到 Song.Author.0/Illustration.jpg 或 avatar.xxx
+        orig = rel[:-4]  # 去掉 .png，得到 Assets/Tracks/Song.Author.0/Illustration.jpg 或 avatar.xxx
     elif rel == "metadata.json":
         return None  # 资产清单不需要
     else:
         return None
+
+    # 去掉 PhiInfo 保留的 "Assets/Tracks/" 前缀
+    if orig.startswith("Assets/Tracks/"):
+        orig = orig[len("Assets/Tracks/"):]
 
     # 头像：avatar.{name}.png → avatar/{name}.png
     if orig.startswith("avatar."):

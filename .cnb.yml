@@ -22,9 +22,28 @@ main:
             git clone --depth=1 https://github.com/PhigrosLabs/PhiInfo.git /tmp/phiinfo
             dotnet build /tmp/phiinfo/src/PhiInfo.CLI -c Release
 
+        # 2.5 如果未手动填写 APK 链接，从 TapTap 自动获取最新版本
+        - name: Auto-detect from TapTap
+          if: |
+            [ -z "${APK_DOWNLOAD_URL:-}" ]
+          script: |
+            echo "未填写 APK 链接，从 TapTap 自动获取..."
+            python3 taptap.py > /tmp/taptap.json
+            cat /tmp/taptap.json
+            # 提取值为环境变量（后续步骤使用）
+            echo "##[set-output APK_DOWNLOAD_URL=$(python3 -c "import json,sys;print(json.load(open('/tmp/taptap.json')).get('download_url',''))")]"
+            echo "##[set-output VERSION_NAME=$(python3 -c "import json,sys;print(json.load(open('/tmp/taptap.json')).get('version_name',''))")]"
+            echo "##[set-output VERSION_CODE=$(python3 -c "import json,sys;print(json.load(open('/tmp/taptap.json')).get('version_code',''))")]"
+          exports:
+            APK_DOWNLOAD_URL: APK_DOWNLOAD_URL
+            VERSION_NAME: VERSION_NAME
+            VERSION_CODE: VERSION_CODE
+
         # 3. 下载 APK
         - name: Download APK
-          script: aria2c -x16 "$APK_DOWNLOAD_URL" -o game.apk
+          script: |
+            echo "Downloading: $APK_DOWNLOAD_URL"
+            aria2c -x16 "$APK_DOWNLOAD_URL" -o game.apk
 
         # 4. PhiInfo 导出所有资源
         - name: PhiInfo Export
@@ -42,10 +61,11 @@ main:
         - name: Package Phira
           script: python3 phira.py
 
-        # 8. 推送产物到 asset-xtower
+        # 8. 推送产物到 asset-xtower (先清空旧文件防止 build residue)
         - name: Push to asset-xtower
           script: |
             git clone --depth=1 "https://cnb:${CNB_TOKEN}@cnb.cool/r-0semi/asset-xtower.git" /tmp/asset-repo
+            rm -rf /tmp/asset-repo/chart /tmp/asset-repo/music /tmp/asset-repo/illustration /tmp/asset-repo/illustrationBlur /tmp/asset-repo/illustrationLowRes /tmp/asset-repo/avatar /tmp/asset-repo/info /tmp/asset-repo/phira
             cp -r output/* /tmp/asset-repo/
             cd /tmp/asset-repo
             git config user.name "r-0semi"

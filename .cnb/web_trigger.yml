@@ -7,10 +7,10 @@ branch:
         isDefault: true
         inputs:
           APK_DOWNLOAD_URL:
-            name: APK 下载链接
-            description: Phigros APK 直链下载地址
-            placeholder: https://example.com/phigros.apk
-            required: true
+            name: APK 下载链接 (留空则从 TapTap 自动获取)
+            description: 留空自动从 TapTap 拉取最新版
+            placeholder: 留空自动获取
+            required: false
             type: input
           VERSION_NAME:
             name: 版本名称 (选填)
