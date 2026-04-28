@@ -16,11 +16,11 @@ main:
             apt-get update -qq
             apt-get install -y -qq --no-install-recommends aria2 python3
 
-        # 2. 克隆 PhiInfo 源码并编译 (无预编译 Release, 从源码构建)
+        # 2. 克隆 PhiInfo 源码并编译 (无预编译 Release, 从源码构建, 禁用 AOT)
         - name: Build PhiInfo
           script: |
             git clone --depth=1 https://github.com/PhigrosLabs/PhiInfo.git /tmp/phiinfo
-            dotnet publish /tmp/phiinfo/src/PhiInfo.CLI -c Release -o /usr/local/phiinfo
+            dotnet publish /tmp/phiinfo/src/PhiInfo.CLI -c Release -o /usr/local/phiinfo -p:PublishAot=false
             ln -s /usr/local/phiinfo/PhiInfo.CLI /usr/local/bin/PhiInfo.CLI
 
         # 3. 下载 APK
