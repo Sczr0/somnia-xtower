@@ -5,8 +5,8 @@
 main:
   web_trigger_build:
     - docker:
-        image: python:3.10
-      # 引用密钥仓库中的 Token，注入为环境变量
+        # 用 .NET SDK 镜像做底（自带 dotnet），往上装 Python（几十MB，秒装）
+        image: mcr.microsoft.com/dotnet/sdk:10.0
       imports: https://cnb.cool/r-0semi/secrets-xtower/-/blob/main/env.yml
       runner:
         tags: cnb:arch:amd64
@@ -14,46 +14,28 @@ main:
       env:
         SKIP_INDEX_GENERATION: "1"
       stages:
-        # 1. 安装系统工具
+        # 1. 安装系统工具 + Python（.NET 已自带，只装 Python 和音频编解码库）
         - name: Install System Tools
           script: |
-            sed -i 's|http://deb.debian.org|http://mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
-            sed -i 's|http://deb.debian.org|http://mirrors.aliyun.com|g' /etc/apt/sources.list
             apt-get update -qq
-            apt-get install -y -qq --no-install-recommends aria2 libvorbis-dev libogg-dev git wget
+            apt-get install -y -qq --no-install-recommends aria2 libvorbis-dev libogg-dev git wget python3 python3-pip python3-venv
 
         # 2. 安装 Python 依赖
         - name: Install Python Dependencies
-          script: pip install -r requirements.txt
+          script: pip3 install -r requirements.txt
 
-        # 3. 安装 .NET 10 (PhiInfo.CLI 运行时，大文件下载防止 10min 静默超时)
-        - name: Install .NET 10
-          script: |
-            ( while true; do sleep 60; echo "  [dotnet] downloading..."; done ) &
-            KEEPALIVE_PID=$!
-            wget -q https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh
-            chmod +x /tmp/dotnet-install.sh
-            /tmp/dotnet-install.sh --channel 10.0
-            kill $KEEPALIVE_PID 2>/dev/null
-            echo "[dotnet] .NET 10 installation complete"
-
-        # 4. 运行主构建脚本
+        # 3. 运行主构建脚本
         - name: Build Assets
-          script: |
-            export PATH="$HOME/.dotnet:$PATH"
-            export DOTNET_ROOT="$HOME/.dotnet"
-            python main.py
+          script: python3 main.py
 
-        # 5. PhiInfo 额外信息提取
+        # 4. PhiInfo 额外信息提取
         - name: Extract PhiInfo
           script: |
-            export PATH="$HOME/.dotnet:$PATH"
-            export DOTNET_ROOT="$HOME/.dotnet"
             dotnet PhiInfo.CLI/PhiInfo.CLI.dll game.apk false
             mkdir -p output/info
             mv output/all_info.json output/info/ 2>/dev/null || true
 
-        # 6. 生成版本文件
+        # 5. 生成版本文件
         - name: Generate Version
           script: |
             mkdir -p output/info
@@ -62,11 +44,11 @@ main:
             printf '%s\n' "${VERSION_NAME} (${VERSION_CODE})" > output/info/version.txt
             echo "Version: ${VERSION_NAME} (${VERSION_CODE})"
 
-        # 7. 生成资源索引
+        # 6. 生成资源索引
         - name: Generate Index
-          script: python -c "import generate_index; generate_index.generate_site_resources()"
+          script: python3 -c "import generate_index; generate_index.generate_site_resources()"
 
-        # 8. 推送产物到 asset-xtower (CNB 内网)
+        # 7. 推送产物到 asset-xtower (CNB 内网)
         - name: Push to asset-xtower
           script: |
             git clone --depth=1 "https://cnb:${CNB_TOKEN}@cnb.cool/r-0semi/asset-xtower.git" /tmp/asset-repo
