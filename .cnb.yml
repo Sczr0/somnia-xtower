@@ -26,12 +26,16 @@ main:
         - name: Install Python Dependencies
           script: pip install -r requirements.txt
 
-        # 3. 安装 .NET 10 (PhiInfo.CLI 运行时)
+        # 3. 安装 .NET 10 (PhiInfo.CLI 运行时，大文件下载防止 10min 静默超时)
         - name: Install .NET 10
           script: |
+            ( while true; do sleep 60; echo "  [dotnet] downloading..."; done ) &
+            KEEPALIVE_PID=$!
             wget -q https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh
             chmod +x /tmp/dotnet-install.sh
             /tmp/dotnet-install.sh --channel 10.0
+            kill $KEEPALIVE_PID 2>/dev/null
+            echo "[dotnet] .NET 10 installation complete"
 
         # 4. 运行主构建脚本
         - name: Build Assets
