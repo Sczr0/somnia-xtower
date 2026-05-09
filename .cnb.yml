@@ -14,7 +14,7 @@ main:
         - name: Install Tools
           script: |
             apt-get update -qq
-            apt-get install -y -qq --no-install-recommends aria2 python3
+            apt-get install -y -qq --no-install-recommends aria2 python3 python3-pip python3-pil
 
         # 2. 克隆 PhiInfo 源码并编译
         - name: Build PhiInfo
@@ -22,28 +22,9 @@ main:
             git clone --depth=1 https://github.com/PhigrosLabs/PhiInfo.git /tmp/phiinfo
             dotnet build /tmp/phiinfo/src/PhiInfo.CLI -c Release
 
-        # 2.5 如果未手动填写 APK 链接，从 TapTap 自动获取最新版本
-        - name: Auto-detect from TapTap
-          if: |
-            [ -z "${APK_DOWNLOAD_URL:-}" ]
-          script: |
-            echo "未填写 APK 链接，从 TapTap 自动获取..."
-            python3 taptap.py > /tmp/taptap.json
-            cat /tmp/taptap.json
-            # 提取值为环境变量（后续步骤使用）
-            echo "##[set-output APK_DOWNLOAD_URL=$(python3 -c "import json,sys;print(json.load(open('/tmp/taptap.json')).get('download_url',''))")]"
-            echo "##[set-output VERSION_NAME=$(python3 -c "import json,sys;print(json.load(open('/tmp/taptap.json')).get('version_name',''))")]"
-            echo "##[set-output VERSION_CODE=$(python3 -c "import json,sys;print(json.load(open('/tmp/taptap.json')).get('version_code',''))")]"
-          exports:
-            APK_DOWNLOAD_URL: APK_DOWNLOAD_URL
-            VERSION_NAME: VERSION_NAME
-            VERSION_CODE: VERSION_CODE
-
-        # 3. 下载 APK
+        # 3. 下载 APK (链接由 CF Worker 触发时传入)
         - name: Download APK
-          script: |
-            echo "Downloading: $APK_DOWNLOAD_URL"
-            aria2c -x16 "$APK_DOWNLOAD_URL" -o game.apk
+          script: aria2c -x16 "$APK_DOWNLOAD_URL" -o game.apk
 
         # 4. PhiInfo 导出所有资源
         - name: PhiInfo Export
@@ -53,7 +34,11 @@ main:
         - name: Translate Output
           script: python3 translate.py
 
-        # 6. 生成网站索引
+        # 6. 后处理：PNG -> webp/avif (写入 lilith/ill 目录)
+        - name: Convert Image Formats
+          script: python3 convert_image_formats.py
+
+        # 7. 生成网站索引（已在 output 中收录 lilith/*.webp）
         - name: Generate Index
           script: python3 -c "import generate_index; generate_index.generate_site_resources()"
 

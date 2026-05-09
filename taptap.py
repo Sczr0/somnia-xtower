@@ -81,7 +81,8 @@ def get_latest_apk(app_id=PHIGROS_APP_ID):
 
     data = apk_info["data"]
     apk = data["apk"]
-    download_url = data.get("download_url") or data.get("url") or ""
+    # 字段名对照 CF Worker: data.apk.download / .version_name / .version_code
+    download_url = apk.get("download", "")
 
     return {
         "download_url": download_url,
