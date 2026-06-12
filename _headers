@@ -1,11 +1,55 @@
 /*
-  # 跨域与方法
   Access-Control-Allow-Origin: *
   Access-Control-Allow-Methods: GET, HEAD, OPTIONS
-  
   X-Content-Type-Options: nosniff
   X-Frame-Options: SAMEORIGIN
-  
-  # HTTPS 强制 (HSTS)
   Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
   Cache-Control: public, max-age=600, stale-while-revalidate=2592000
+
+/assets/*
+  Cache-Control: public, max-age=600, stale-while-revalidate=2592000
+
+/Source Han Serif CN Light/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/Source Han Sans & Saira Hybrid-Regular #5446/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/avatar/*
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=2592000
+
+/chap/*
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=2592000
+
+/chart/*
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=2592000
+
+/illustration/*
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=2592000
+
+/illustrationBlur/*
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=2592000
+
+/illustrationLowRes/*
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=2592000
+
+/lilith/*
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=2592000
+
+/music/*
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=2592000
+
+/phira/*
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=2592000
+
+/files.json
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400
+
+/index.html
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400
+
+/version.txt
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400
+
+/info/version.txt
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400

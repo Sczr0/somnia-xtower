@@ -21,3 +21,4 @@ nul
 # 忽略 Claude Code 和 Spec Workflow 本地配置
 .claude/
 .spec-workflow/
+.codex/

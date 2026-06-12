@@ -16,8 +16,29 @@ MANUAL_ASSETS_DIR = "manual_assets"
 STATIC_FILES_TO_COPY = [
     "index.html",
     "robots.txt",
-    "_headers"
+    "_headers",
+    "favicon.svg",
+    os.path.join("assets", "index.css"),
+    os.path.join("assets", "search.js"),
 ]
+
+STATIC_FILE_WEB_PATHS = {
+    static_file.replace("\\", "/")
+    for static_file in STATIC_FILES_TO_COPY
+}
+
+METADATA_FILE_WEB_PATHS = {
+    JSON_INDEX_FILENAME,
+    CHECKSUM_FILENAME,
+    "_redirects",
+    "version.txt",
+    "info/version.txt",
+}
+
+
+def is_hidden_web_path(web_path):
+    """判断 Web 路径是否包含隐藏目录或隐藏文件。"""
+    return any(part.startswith(".") for part in web_path.split("/"))
 
 def calculate_sha256(filepath):
     """计算文件的 SHA-256 哈希值"""
@@ -120,6 +141,24 @@ def build_illustration_redirect_rules(file_list_for_search, hash_length=2, min_g
     }
 
 
+def remove_generated_illustration_redirects(content):
+    """移除旧的自动曲绘入口，避免多次生成时重复追加规则。"""
+    filtered_lines = []
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("/ill/"):
+            continue
+        if stripped.startswith("# === Auto-generated illustration redirects"):
+            continue
+        if stripped.startswith("/lilith/ill/"):
+            continue
+        if stripped.startswith("# === Auto-generated lilith illustration redirects"):
+            continue
+        filtered_lines.append(line)
+
+    return "\n".join(filtered_lines).rstrip()
+
+
 def generate_site_resources():
     print("--- 开始生成网站索引与静态文件 ---")
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -136,6 +175,9 @@ def generate_site_resources():
         source_path = filename
         target_path = os.path.join(OUTPUT_DIR, filename)
         if os.path.exists(source_path):
+            parent_dir = os.path.dirname(target_path)
+            if parent_dir:
+                os.makedirs(parent_dir, exist_ok=True)
             shutil.copy2(source_path, target_path)
             print(f"  - 已部署: {source_path} -> {target_path}")
         else:
@@ -147,12 +189,18 @@ def generate_site_resources():
     
     for root, dirs, files in os.walk(OUTPUT_DIR):
         for file in files:
-            # 排除元文件
-            if file in STATIC_FILES_TO_COPY or file == JSON_INDEX_FILENAME or file.startswith("."):
-                continue
             full_path = os.path.join(root, file)
             relative_path = os.path.relpath(full_path, OUTPUT_DIR)
             web_path = relative_path.replace("\\", "/")
+
+            # 排除页面壳、元文件和前端静态资源，避免它们出现在搜索结果里。
+            if (
+                web_path in STATIC_FILE_WEB_PATHS
+                or web_path in METADATA_FILE_WEB_PATHS
+                or is_hidden_web_path(web_path)
+            ):
+                continue
+
             file_list_for_search.append(web_path)
 
     file_list_for_search.sort()
@@ -163,7 +211,10 @@ def generate_site_resources():
 
     # 3.5 生成 illustration 虚拟入口
     print("\n正在生成 illustration 虚拟入口 (_redirects)...")
-    new_rules, redirect_meta = build_illustration_redirect_rules(file_list_for_search)
+    new_rules, redirect_meta = build_illustration_redirect_rules(
+        file_list_for_search,
+        rng=random.Random(0),
+    )
 
     if new_rules:
         print(f"  - 找到 {redirect_meta['png_count']} 个 png 曲绘文件")
@@ -177,14 +228,7 @@ def generate_site_resources():
         if os.path.exists(redirects_path):
             with open(redirects_path, "r", encoding="utf-8") as f:
                 existing_content = f.read()
-            filtered_lines = []
-            for line in existing_content.splitlines():
-                if "/lilith/ill/" in line:
-                    continue
-                if "Auto-generated lilith illustration redirects" in line:
-                    continue
-                filtered_lines.append(line)
-            existing_content = "\n".join(filtered_lines).rstrip()
+            existing_content = remove_generated_illustration_redirects(existing_content)
 
         # 写入合并后的内容
         with open(redirects_path, "w", encoding="utf-8") as f:
@@ -203,12 +247,12 @@ def generate_site_resources():
     # 再次遍历 output 目录，这次包含所有文件
     for root, dirs, files in os.walk(OUTPUT_DIR):
         for file in files:
-            # 我们要校验所有文件，但 checksum 文件本身不能包含自己
-            if file == CHECKSUM_FILENAME:
-                continue
-            
             full_path = os.path.join(root, file)
             relative_path = os.path.relpath(full_path, OUTPUT_DIR).replace("\\", "/")
+
+            # 我们要校验所有公开文件，但隐藏目录和 checksum 文件本身不能包含进去。
+            if file == CHECKSUM_FILENAME or is_hidden_web_path(relative_path):
+                continue
             
             # 计算哈希
             file_hash = calculate_sha256(full_path)
