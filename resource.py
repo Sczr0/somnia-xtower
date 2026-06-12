@@ -38,6 +38,7 @@ DEFAULT_ILLUSTRATION_IMAGE_EXPORT_FORMATS = ("png", "webp", "avif")
 ILLUSTRATION_IMAGE_EXPORT_FORMATS = ("png",)
 LILITH_ILL_EXPORT_FORMATS = ("webp", "avif")
 LILITH_ILL_LOW_EXPORT_FORMATS = ("webp", "avif")
+LILITH_ILL_BLUR_EXPORT_FORMATS = ("webp", "avif")
 
 
 def resolve_illustration_export_formats(raw_formats=None, support_checker=None, logger=print):
@@ -75,6 +76,18 @@ def resolve_lilith_ill_export_formats(raw_formats=None, support_checker=None, lo
 def resolve_lilith_ill_low_export_formats(raw_formats=None, support_checker=None, logger=print):
     """
     瑙ｆ瀽 lilith/illLow 鐨勫疄楠屾牸寮忥紝鏄惧紡鎺掗櫎 png锛岄伩鍏嶄笌 illustrationLowRes 鐩綍閲嶅銆?
+    """
+    resolved_with_png = resolve_illustration_export_formats(
+        raw_formats=raw_formats,
+        support_checker=support_checker,
+        logger=logger,
+    )
+    return tuple(fmt for fmt in resolved_with_png if fmt != "png")
+
+
+def resolve_lilith_ill_blur_export_formats(raw_formats=None, support_checker=None, logger=print):
+    """
+    解析 lilith/illBlur 的实验格式，显式排除 png，避免与 illustrationBlur 目录重复。
     """
     resolved_with_png = resolve_illustration_export_formats(
         raw_formats=raw_formats,
@@ -245,6 +258,13 @@ def process_object(key, obj, avatar_map):
                     ):
                         queue_in.put((rel_path, payload))
 
+                    for rel_path, payload in iter_image_variant_payloads(
+                        obj.image,
+                        f"lilith/illBlur/{song_id}",
+                        LILITH_ILL_BLUR_EXPORT_FORMATS,
+                    ):
+                        queue_in.put((rel_path, payload))
+
         except Exception as e:
             print(f"处理曲绘失败: {key}, 错误: {e}")
 
@@ -265,12 +285,13 @@ def process_object(key, obj, avatar_map):
             print(f"音频解码失败 {key}: {e}")
 
 def extract_resources(apk_path, output_dir="output"):
-    global OUTPUT_ROOT, queue_in, ILLUSTRATION_IMAGE_EXPORT_FORMATS, LILITH_ILL_EXPORT_FORMATS, LILITH_ILL_LOW_EXPORT_FORMATS
+    global OUTPUT_ROOT, queue_in, ILLUSTRATION_IMAGE_EXPORT_FORMATS, LILITH_ILL_EXPORT_FORMATS, LILITH_ILL_LOW_EXPORT_FORMATS, LILITH_ILL_BLUR_EXPORT_FORMATS
     OUTPUT_ROOT = output_dir
     print(f"--- 开始提取资源文件 (Music/Image/Chart) ---", flush=True)
     ILLUSTRATION_IMAGE_EXPORT_FORMATS = ("png",)
     LILITH_ILL_EXPORT_FORMATS = resolve_lilith_ill_export_formats()
     LILITH_ILL_LOW_EXPORT_FORMATS = resolve_lilith_ill_low_export_formats()
+    LILITH_ILL_BLUR_EXPORT_FORMATS = resolve_lilith_ill_blur_export_formats()
     print(
         f"[image_export] 曲绘原图导出格式: {', '.join(ILLUSTRATION_IMAGE_EXPORT_FORMATS)}",
         flush=True,
@@ -282,6 +303,13 @@ def extract_resources(apk_path, output_dir="output"):
         )
     else:
         print("[image_export] lilith/ill 实验格式: 未启用（无可用编码器）", flush=True)
+    if LILITH_ILL_BLUR_EXPORT_FORMATS:
+        print(
+            f"[image_export] lilith/illBlur 实验格式: {', '.join(LILITH_ILL_BLUR_EXPORT_FORMATS)}",
+            flush=True,
+        )
+    else:
+        print("[image_export] lilith/illBlur 实验格式: 未启用（无可用编码器）", flush=True)
 
     cpu_count = os.cpu_count() or 2
     max_workers = _get_int_env("RESOURCE_WORKERS", min(4, cpu_count), min_value=1, max_value=16)
