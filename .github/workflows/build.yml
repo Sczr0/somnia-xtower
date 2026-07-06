@@ -38,24 +38,24 @@ jobs:
 
       # 2. 安装系统级依赖
       # aria2: 下载神器
-      # libvorbis/ogg: fsb5 音频解码需要
+      # libvorbis/ogg: fsb5 音频解码需要（PhiInfo 用 Fmod5Sharp 不需要）
       - name: Install System Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y aria2 libvorbis-dev libogg-dev
+          sudo apt-get install -y aria2
 
-      # 3. 配置 Python
+      # 3. 配置 Python（仅用于 translate / phira / generate_index）
       - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
           cache: 'pip'
 
-      # 4. 安装 Python 库
+      # 4. 安装 Python 库（仅需 Pillow）
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install Pillow
 
       # 4.5 安装 .NET 10（PhiInfo.CLI 运行时）
       - name: Set up .NET 10
@@ -64,34 +64,70 @@ jobs:
           dotnet-version: '10.0.x'
           include-prerelease: true
 
-      # 5. 运行主脚本 (核心逻辑)
-      - name: Run Build Script (Main)
+      # 5. 下载 APK（由触发时传入链接）
+      - name: Download APK
         env:
-          # 自动判断来源：如果是手动触发取 inputs，如果是 API 触发取 payload
-          APK_DOWNLOAD_URL: ${{ inputs.apk_url || github.event.client_payload.download_url }}
-          # 先跳过 main.py 内部索引生成，待 PhiInfo 与版本文件落盘后再统一生成
-          SKIP_INDEX_GENERATION: "1"
+          APK_URL: ${{ inputs.apk_url || github.event.client_payload.download_url }}
         run: |
-          python main.py
+          aria2c -x16 "$APK_URL" -o game.apk
 
-      # 5.5 运行 PhiInfo
-      - name: Run PhiInfo Extraction
+      # 5.5 PhiInfo 导出（WebP 格式，一次完成）
+      - name: PhiInfo Export
         run: |
-          dotnet PhiInfo.CLI/PhiInfo.CLI.dll game.apk false
-          
-          # 将 PhiInfo 生成的 all_info.json 移动到 output/info
-          mkdir -p output/info
-          mv output/all_info.json output/info/ 2>/dev/null || true
+          dotnet PhiInfo.CLI/PhiInfo.CLI.dll \
+            -p game.apk \
+            --image-format Webp \
+            export -o output
 
-      # 5.6 生成版本文件，供前端/客户端读取
+      # 5.6 翻译目录结构（asset/ → chart/ music/ illustration/ avatar/）
+      - name: Translate Output Structure
+        run: python3 translate.py
+
+      # 5.7 生成缺失资产（PhiInfo 不输出的部分）
+      - name: Generate Missing Assets
+        run: |
+          # illustrationLowRes: 从 illustration 降采样（Phira 需要 PNG）
+          python3 -c "
+import os
+from PIL import Image
+ill_dir = 'output/illustration'
+low_dir = 'output/illustrationLowRes'
+if os.path.isdir(ill_dir):
+    os.makedirs(low_dir, exist_ok=True)
+    for f in os.listdir(ill_dir):
+        if not f.endswith('.webp'): continue
+        song_id = f[:-5]
+        img = Image.open(os.path.join(ill_dir, f))
+        img.thumbnail((256, 256))
+        img.save(os.path.join(low_dir, f'{song_id}.png'))
+        print(f'  lowres: {song_id}.png')
+"
+
+          # lilith/ill: illustration 已经是 WebP，直接同步
+          if [ -d output/illustration ]; then
+            mkdir -p output/lilith/ill
+            cp output/illustration/*.webp output/lilith/ill/ 2>/dev/null || true
+            echo "lilith/ill: synced"
+          fi
+
+      # 5.8 打包 Phira (.pez)
+      - name: Package Phira
+        run: python3 phira.py
+
+      # 5.9 生成版本文件（优先使用 PhiInfo 的 version.json，否则 fallback）
       - name: Generate Version File
         env:
-          # 优先手动输入，其次使用 Worker repository_dispatch 的 payload
           VERSION_NAME: ${{ inputs.version_name || github.event.client_payload.version_name }}
           VERSION_CODE: ${{ inputs.version_code || github.event.client_payload.version_code }}
           APK_DOWNLOAD_URL: ${{ inputs.apk_url || github.event.client_payload.download_url }}
         run: |
           mkdir -p output/info
+
+          # 如果 PhiInfo 已经通过 version.json 生成好了 version.txt，就跳过
+          if [ -f output/info/version.txt ]; then
+            echo "version.txt already exists: $(cat output/info/version.txt)"
+            exit 0
+          fi
 
           if [ -n "${VERSION_NAME:-}" ] && [ -n "${VERSION_CODE:-}" ]; then
             VERSION_TEXT="${VERSION_NAME} (${VERSION_CODE})"
@@ -100,7 +136,6 @@ jobs:
           elif [ -n "${VERSION_CODE:-}" ]; then
             VERSION_TEXT="${VERSION_CODE}"
           else
-            # 手动触发未提供版本时，尝试从 APK URL 中提取 x.y.z / x.y 版本号，失败则写 unknown
             VERSION_TEXT="$(printf '%s\n' "${APK_DOWNLOAD_URL:-}" | sed -nE 's/.*([0-9]+\.[0-9]+(\.[0-9]+)?).*/\1/p' | head -n 1)"
             if [ -z "${VERSION_TEXT:-}" ]; then
               VERSION_TEXT="unknown"
@@ -110,13 +145,12 @@ jobs:
           printf '%s\n' "${VERSION_TEXT}" > output/info/version.txt
           echo "Generated output/info/version.txt => ${VERSION_TEXT}"
 
-      # 5.7 最终生成索引（包含 PhiInfo 与 version.txt）
+      # 5.10 最终生成索引（files.json + _redirects + checksums.sha256）
       - name: Generate Final Index
         run: |
           python -c "import generate_index; generate_index.generate_site_resources()"
 
       # 6. 部署到 Cloudflare Pages
-      # 直接上传 output 文件夹
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:

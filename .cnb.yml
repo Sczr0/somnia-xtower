@@ -26,23 +26,39 @@ main:
         - name: Download APK
           script: aria2c -x16 "$APK_DOWNLOAD_URL" -o game.apk
 
-        # 4. PhiInfo 导出所有资源
+        # 4. PhiInfo 导出所有资源（直接输出 WebP，省掉中转转换）
         - name: PhiInfo Export
-          script: dotnet /tmp/phiinfo/src/PhiInfo.CLI/bin/Release/net10.0/PhiInfo.CLI.dll -p game.apk --image-format PNG export -o output
+          script: dotnet /tmp/phiinfo/src/PhiInfo.CLI/bin/Release/net10.0/PhiInfo.CLI.dll -p game.apk --image-format Webp export -o output
 
         # 5. 翻译目录结构 + 生成 TSV (适配 generate_index 和 phira)
         - name: Translate Output
           script: python3 translate.py
 
-        # 6. 后处理：PNG -> webp/avif (写入 lilith/ill 目录)
-        - name: Convert Image Formats
-          script: python3 convert_image_formats.py
+        # 6. 补齐缺失资产（PhiInfo 不输出 illustrationLowRes，从 illustration 降采样）
+        - name: Generate Missing Assets
+          script: |
+            python3 -c "
+import os
+from PIL import Image
+ill_dir = 'output/illustration'
+low_dir = 'output/illustrationLowRes'
+if os.path.isdir(ill_dir):
+    os.makedirs(low_dir, exist_ok=True)
+    for f in os.listdir(ill_dir):
+        if not f.endswith('.webp'): continue
+        song_id = f[:-5]
+        img = Image.open(os.path.join(ill_dir, f))
+        img.thumbnail((256, 256))
+        img.save(os.path.join(low_dir, f'{song_id}.png'))
+"
+            mkdir -p output/lilith/ill
+            cp output/illustration/*.webp output/lilith/ill/ 2>/dev/null || true
 
-        # 7. 生成网站索引（已在 output 中收录 lilith/*.webp）
+        # 7. 生成网站索引
         - name: Generate Index
           script: python3 -c "import generate_index; generate_index.generate_site_resources()"
 
-        # 7. 打包 Phira (.pez)
+        # 8. 打包 Phira (.pez)
         - name: Package Phira
           script: python3 phira.py
 

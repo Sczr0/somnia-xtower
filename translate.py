@@ -8,6 +8,22 @@ ASSET_DIR = os.path.join(PHIINFO_OUTPUT, "asset")
 INFO_DIR = os.path.join(PHIINFO_OUTPUT, "info")
 LEVELS = ["EZ", "HD", "IN", "AT"]
 
+# 自动检测 PhiInfo 输出的图片扩展名（png / webp / avif）
+def _detect_image_ext():
+    if not os.path.isdir(ASSET_DIR):
+        return "png"
+    for root, _dirs, files in os.walk(ASSET_DIR):
+        for f in files:
+            if f.endswith(".webp"):
+                return "webp"
+            if f.endswith(".png"):
+                return "png"
+            if f.endswith(".avif"):
+                return "avif"
+    return "png"
+
+IMAGE_EXT = _detect_image_ext()
+
 
 def translate_assets():
     """将 PhiInfo 的 asset/ 文件映射到站点目录结构。"""
@@ -36,13 +52,13 @@ def translate_assets():
 
 def _map_asset_path(rel):
     """将一条 PhiInfo asset 路径映射为目标站点路径。"""
-    # 表单后缀：PhiInfo 在所有原始 key 后加了 .txt / .ogg / .png
+    # 表单后缀：PhiInfo 在所有原始 key 后加了 .txt / .ogg / .{IMAGE_EXT}
     if rel.endswith(".txt"):
         orig = rel[:-4]  # 去掉 .txt，得到 Assets/Tracks/Song.Author.0/Chart_EZ.json
     elif rel.endswith(".ogg"):
         orig = rel[:-4]  # 去掉 .ogg，得到 Assets/Tracks/Song.Author.0/music.wav
-    elif rel.endswith(".png"):
-        orig = rel[:-4]  # 去掉 .png，得到 Assets/Tracks/Song.Author.0/Illustration.jpg 或 avatar.xxx
+    elif rel.endswith(f".{IMAGE_EXT}"):
+        orig = rel[:-(len(IMAGE_EXT) + 1)]  # 去掉 .png/.webp/.avif
     elif rel == "metadata.json":
         return None  # 资产清单不需要
     else:
@@ -52,10 +68,10 @@ def _map_asset_path(rel):
     if orig.startswith("Assets/Tracks/"):
         orig = orig[len("Assets/Tracks/"):]
 
-    # 头像：avatar.{name}.png → avatar/{name}.png
+    # 头像：avatar.{name}.{ext} → avatar/{name}.{ext}
     if orig.startswith("avatar."):
         name = orig[len("avatar."):]
-        return f"avatar/{name}.png"
+        return f"avatar/{name}.{IMAGE_EXT}"
 
     # 谱面 / 音乐 / 曲绘：SongID.Author.0/XXX
     folder, filename = os.path.split(orig)
@@ -70,13 +86,13 @@ def _map_asset_path(rel):
         # Song.Author.0/music.wav → music/Song.Author.ogg
         return f"music/{song_id}.ogg"
 
-    # 曲绘
+    # 曲绘（PhiInfo 不过滤 Blur/LowRes，但保留映射以免未来支持）
     if "IllustrationBlur" in filename:
-        return f"illustrationBlur/{song_id}.png"
+        return f"illustrationBlur/{song_id}.{IMAGE_EXT}"
     if "IllustrationLowRes" in filename:
-        return f"illustrationLowRes/{song_id}.png"
+        return f"illustrationLowRes/{song_id}.{IMAGE_EXT}"
     if "Illustration" in filename:
-        return f"illustration/{song_id}.png"
+        return f"illustration/{song_id}.{IMAGE_EXT}"
 
     return None
 
