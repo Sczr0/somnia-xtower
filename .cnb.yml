@@ -34,25 +34,9 @@ main:
         - name: Translate Output
           script: python3 translate.py
 
-        # 6. 补齐缺失资产（PhiInfo 不输出 illustrationLowRes，从 illustration 降采样）
+        # 6. 补齐缺失资产（降采样 + lilith 同步）
         - name: Generate Missing Assets
-          script: |
-            python3 << 'PYEOF'
-import os
-from PIL import Image
-ill_dir = 'output/illustration'
-low_dir = 'output/illustrationLowRes'
-if os.path.isdir(ill_dir):
-    os.makedirs(low_dir, exist_ok=True)
-    for f in os.listdir(ill_dir):
-        if not f.endswith('.webp'): continue
-        song_id = f[:-5]
-        img = Image.open(os.path.join(ill_dir, f))
-        img.thumbnail((256, 256))
-        img.save(os.path.join(low_dir, f'{song_id}.png'))
-PYEOF
-            mkdir -p output/lilith/ill
-            cp output/illustration/*.webp output/lilith/ill/ 2>/dev/null || true
+          script: python3 generate_lowres.py
 
         # 7. 生成网站索引
         - name: Generate Index
