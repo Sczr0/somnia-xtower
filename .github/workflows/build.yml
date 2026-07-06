@@ -87,7 +87,7 @@ jobs:
       - name: Generate Missing Assets
         run: |
           # illustrationLowRes: 从 illustration 降采样（Phira 需要 PNG）
-          python3 -c "
+          python3 << 'PYEOF'
 import os
 from PIL import Image
 ill_dir = 'output/illustration'
@@ -101,7 +101,7 @@ if os.path.isdir(ill_dir):
         img.thumbnail((256, 256))
         img.save(os.path.join(low_dir, f'{song_id}.png'))
         print(f'  lowres: {song_id}.png')
-"
+PYEOF
 
           # lilith/ill: illustration 已经是 WebP，直接同步
           if [ -d output/illustration ]; then

@@ -37,7 +37,7 @@ main:
         # 6. 补齐缺失资产（PhiInfo 不输出 illustrationLowRes，从 illustration 降采样）
         - name: Generate Missing Assets
           script: |
-            python3 -c "
+            python3 << 'PYEOF'
 import os
 from PIL import Image
 ill_dir = 'output/illustration'
@@ -50,7 +50,7 @@ if os.path.isdir(ill_dir):
         img = Image.open(os.path.join(ill_dir, f))
         img.thumbnail((256, 256))
         img.save(os.path.join(low_dir, f'{song_id}.png'))
-"
+PYEOF
             mkdir -p output/lilith/ill
             cp output/illustration/*.webp output/lilith/ill/ 2>/dev/null || true
 
