@@ -116,13 +116,17 @@ def _build_group_redirect_rules(
 
 
 def build_illustration_redirect_rules(file_list_for_search, hash_length=2, min_groups=2, rng=None):
-    illustration_png_files = _collect_illustration_files(file_list_for_search, "png")
-    if not illustration_png_files:
+    illustration_img_files = _collect_illustration_files(file_list_for_search, "png")
+    img_ext = "png"
+    if not illustration_img_files:
+        illustration_img_files = _collect_illustration_files(file_list_for_search, "webp")
+        img_ext = "webp"
+    if not illustration_img_files:
         return [], {}
 
     new_rules = []
     ill_rules, num_groups, capacity_per_group = _build_group_redirect_rules(
-        illustration_png_files,
+        illustration_img_files,
         "/ill",
         "jpg",
         hash_length=hash_length,
@@ -130,12 +134,12 @@ def build_illustration_redirect_rules(file_list_for_search, hash_length=2, min_g
         rng=rng,
     )
     new_rules.append(
-        f"\n# === Auto-generated illustration redirects ({len(illustration_png_files)} png files, {num_groups} groups) ==="
+        f"\n# === Auto-generated illustration redirects ({len(illustration_img_files)} {img_ext} files, {num_groups} groups) ==="
     )
     new_rules.extend(ill_rules)
 
     return new_rules, {
-        "png_count": len(illustration_png_files),
+        "png_count": len(illustration_img_files),
         "num_groups": num_groups,
         "capacity_per_group": capacity_per_group,
     }

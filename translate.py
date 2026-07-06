@@ -111,8 +111,8 @@ def translate_info():
     diff_lines = []
 
     for song in songs:
-        sid = song.get("key", "")
-        name = song.get("name", {})
+        sid = song.get("id", "").replace(".0", "")
+        name = song.get("name", "")
         if isinstance(name, dict):
             name = name.get("zh_cn", "") or next(iter(name.values()), "")
         composer = song.get("composer", "")
