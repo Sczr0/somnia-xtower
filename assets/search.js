@@ -91,7 +91,7 @@ function buildRecord(path) {
 }
 
 async function loadVersion() {
-  const candidates = ["version.txt", "info/version.txt"];
+  const candidates = ["info/version.txt", "version.txt"];
 
   for (const path of candidates) {
     try {
