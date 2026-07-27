@@ -182,9 +182,67 @@ def translate_version():
     print(f"  version.txt: {text}")
 
 
+def translate_all_info():
+    """生成 info/all_info.json（合并 songs + collection + avatars + tips）。
+
+    songs 来自 PhiInfo 的 songs.json，
+    collection/avatars/tips 来自 manual_assets/info/ 的静态文件。
+    """
+    songs_path = os.path.join(INFO_DIR, "songs.json")
+    if not os.path.exists(songs_path):
+        print("  [warn] songs.json not found, skipping all_info.json")
+        return
+
+    with open(songs_path, "r", encoding="utf-8") as f:
+        songs = json.load(f)
+
+    all_info = {"songs": songs, "collection": [], "avatars": [], "tips": []}
+    manual_info = os.path.join(os.path.dirname(__file__) or ".", "manual_assets", "info")
+
+    # --- collection ---
+    coll_path = os.path.join(manual_info, "collection.tsv")
+    if os.path.exists(coll_path):
+        with open(coll_path, "r", encoding="utf-8") as f:
+            for line in f:
+                parts = line.strip().split("\t")
+                if len(parts) >= 3:
+                    all_info["collection"].append({
+                        "key": parts[0],
+                        "name": parts[1],
+                        "sub_index": int(parts[2]) if parts[2].isdigit() else parts[2],
+                    })
+        print(f"  collection: {len(all_info['collection'])} items")
+
+    # --- avatars ---
+    tmp_path = os.path.join(manual_info, "tmp.tsv")
+    if os.path.exists(tmp_path):
+        with open(tmp_path, "r", encoding="utf-8") as f:
+            for line in f:
+                parts = line.strip().split("\t")
+                if len(parts) >= 2:
+                    all_info["avatars"].append({
+                        "name": parts[0],
+                        "addressable_key": parts[1],
+                    })
+        print(f"  avatars: {len(all_info['avatars'])} items")
+
+    # --- tips ---
+    tips_path = os.path.join(manual_info, "tips.txt")
+    if os.path.exists(tips_path):
+        with open(tips_path, "r", encoding="utf-8") as f:
+            all_info["tips"] = [line.strip() for line in f if line.strip()]
+        print(f"  tips: {len(all_info['tips'])} items")
+
+    out_path = os.path.join(INFO_DIR, "all_info.json")
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(all_info, f, ensure_ascii=False)
+    print(f"  all_info.json written")
+
+
 if __name__ == "__main__":
     print("--- Translating PhiInfo output ---")
     translate_assets()
     translate_info()
     translate_version()
+    translate_all_info()
     print("--- Done ---")

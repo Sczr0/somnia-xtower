@@ -26,27 +26,27 @@ main:
         - name: Download APK
           script: aria2c -x16 "$APK_DOWNLOAD_URL" -o game.apk
 
-        # 4. PhiInfo 导出所有资源（直接输出 WebP，省掉中转转换）
+        # 4. PhiInfo 导出所有资源（输出 PNG，前端需要 PNG 格式）
         - name: PhiInfo Export
-          script: dotnet /tmp/phiinfo/src/PhiInfo.CLI/bin/Release/net10.0/PhiInfo.CLI.dll -p game.apk --image-format Webp export -o output
+          script: dotnet /tmp/phiinfo/src/PhiInfo.CLI/bin/Release/net10.0/PhiInfo.CLI.dll -p game.apk --image-format Png export -o output
 
         # 5. 翻译目录结构 + 生成 TSV (适配 generate_index 和 phira)
         - name: Translate Output
           script: python3 translate.py
 
-        # 6. 补齐缺失资产（降采样 + lilith 同步）
+        # 6. 补齐缺失资产：illustration PNG → lilith WebP/AVIF + 低分辨率 PNG
         - name: Generate Missing Assets
           script: python3 generate_lowres.py
 
-        # 7. 生成网站索引
-        - name: Generate Index
-          script: python3 -c "import generate_index; generate_index.generate_site_resources()"
-
-        # 8. 打包 Phira (.pez)
+        # 7. 打包 Phira (.pez)
         - name: Package Phira
           script: python3 phira.py
 
-        # 8. 推送产物到 asset-xtower (先清空旧文件防止 build residue)
+        # 8. 生成网站索引（files.json + _redirects + checksums + 静态文件）
+        - name: Generate Site Index
+          script: python3 -c "import generate_index; generate_index.generate_site_resources()"
+
+        # 9. 推送产物到 asset-xtower (先清空旧文件防止 build residue)
         - name: Push to asset-xtower
           script: |
             git clone --depth=1 "https://cnb:${CNB_TOKEN}@cnb.cool/r-0semi/asset-xtower.git" /tmp/asset-repo

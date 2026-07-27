@@ -71,19 +71,19 @@ jobs:
         run: |
           aria2c -x16 "$APK_URL" -o game.apk
 
-      # 5.5 PhiInfo 导出（WebP 格式，一次完成）
+      # 5.5 PhiInfo 导出（PNG 格式，前端需要 PNG）
       - name: PhiInfo Export
         run: |
           dotnet PhiInfo.CLI/PhiInfo.CLI.dll \
             -p game.apk \
-            --image-format Webp \
+            --image-format Png \
             export -o output
 
       # 5.6 翻译目录结构（asset/ → chart/ music/ illustration/ avatar/）
       - name: Translate Output Structure
         run: python3 translate.py
 
-      # 5.7 生成缺失资产（降采样 + lilith 同步）
+      # 5.7 生成缺失资产（illustration PNG → lilith WebP/AVIF + 低分辨率 PNG）
       - name: Generate Missing Assets
         run: python3 generate_lowres.py
 

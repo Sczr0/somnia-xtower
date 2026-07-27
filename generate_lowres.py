@@ -1,53 +1,67 @@
-"""补齐 lilith 目录 + 生成 Phira 所需的 PNG。
+"""补齐 lilith 目录（WebP + AVIF）+ 确保 illustrationLowRes 为 PNG。
 
-PhiInfo 输出 illustration*/ *.webp 文件后，此脚本负责：
-  1. illustrationLowRes/*.webp → *.png（Phira 打包需要 PNG 格式）
-  2. illustrationLowRes/*.webp → lilith/illLow/（同步 WebP）
-  3. illustrationBlur/*.webp   → lilith/illBlur/（同步 WebP）
-  4. illustration/*.webp       → lilith/ill/   （同步 WebP）
+流程说明（PhiInfo 输出 PNG 后调用）：
+  1. illustrationLowRes/*.png 已存在（PhiInfo 直接输出 PNG），无需转换
+  2. illustration/*.png   → lilith/ill/*.webp + *.avif
+  3. illustrationLowRes/*.png → lilith/illLow/*.webp + *.avif
+  4. illustrationBlur/*.png   → lilith/illBlur/*.webp + *.avif
 """
 import os
-import shutil
 from PIL import Image
 
 OUTPUT_DIR = "output"
 
+# 各子目录的编码参数
+LILITH_FORMATS = {
+    "ill":     {"webp": {"quality": 85, "method": 6}, "avif": {"quality": 60}},
+    "illLow":  {"webp": {"quality": 75, "method": 6}, "avif": {"quality": 50}},
+    "illBlur": {"webp": {"quality": 80, "method": 6}, "avif": {"quality": 55}},
+}
 
-def _sync_webp(src_subdir: str, dst_subdir: str):
+
+def _convert_to_lilith(src_subdir: str, lilith_subdir: str):
+    """将 src_subdir/*.png 转换为 lilith/{lilith_subdir}/*.webp + *.avif"""
     src_dir = os.path.join(OUTPUT_DIR, src_subdir)
-    dst_dir = os.path.join(OUTPUT_DIR, "lilith", dst_subdir)
+    dst_dir = os.path.join(OUTPUT_DIR, "lilith", lilith_subdir)
     if not os.path.isdir(src_dir):
         return
     os.makedirs(dst_dir, exist_ok=True)
-    count = 0
-    for f in os.listdir(src_dir):
-        if f.endswith(".webp"):
-            shutil.copy2(os.path.join(src_dir, f), os.path.join(dst_dir, f))
-            count += 1
-    print(f"  lilith/{dst_subdir}: {count} files")
 
+    formats = LILITH_FORMATS[lilith_subdir]
+    counts = {ext: 0 for ext in formats}
 
-def _convert_lowres_to_png():
-    """PhiInfo 输出 illustrationLowRes/*.webp → *.png（Phira 需要）"""
-    src_dir = os.path.join(OUTPUT_DIR, "illustrationLowRes")
-    if not os.path.isdir(src_dir):
-        return
-    count = 0
-    for f in os.listdir(src_dir):
-        if not f.endswith(".webp"):
+    for fname in os.listdir(src_dir):
+        if not fname.lower().endswith(".png"):
             continue
-        song_id = f[:-5]
-        png_path = os.path.join(src_dir, f"{song_id}.png")
-        if os.path.exists(png_path):
+        song_id = fname[:-4]
+        src_path = os.path.join(src_dir, fname)
+
+        try:
+            img = Image.open(src_path).convert("RGBA")
+        except Exception as e:
+            print(f"  [warn] 跳过 {fname}: {e}")
             continue
-        img = Image.open(os.path.join(src_dir, f))
-        img.save(png_path)
-        count += 1
-    print(f"  lowres -> png: {count} files")
+
+        for ext, kwargs in formats.items():
+            dst_path = os.path.join(dst_dir, f"{song_id}.{ext}")
+            if os.path.exists(dst_path):
+                continue
+            try:
+                out = img.copy()
+                if ext == "avif":
+                    out = out.convert("RGB")
+                out.save(dst_path, ext.upper(), **kwargs)
+                counts[ext] += 1
+            except Exception as e:
+                print(f"  [warn] 编码 {dst_path} 失败: {e}")
+
+        img.close()
+
+    for ext, n in counts.items():
+        print(f"  lilith/{lilith_subdir}: {n} .{ext}")
 
 
 if __name__ == "__main__":
-    _convert_lowres_to_png()
-    _sync_webp("illustration", "ill")
-    _sync_webp("illustrationLowRes", "illLow")
-    _sync_webp("illustrationBlur", "illBlur")
+    _convert_to_lilith("illustration", "ill")
+    _convert_to_lilith("illustrationLowRes", "illLow")
+    _convert_to_lilith("illustrationBlur", "illBlur")
