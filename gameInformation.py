@@ -64,23 +64,32 @@ def extract_game_info(apk_path, output_root="output"):
     for obj in env.objects:
         if obj.type.name != "MonoBehaviour":
             continue
-        # 解析 MonoBehaviour（部分对象受 Unity 版本影响可能不兼容，跳过即可）
-        try:
-            data = obj.read()
-            script = data.m_Script.get_obj().read()
-        except Exception:
+        # obj.read() 依赖 UnityPy 内置 class database，新 Unity 版本可能不兼容。
+        # 改用 typetree.json 中已知的三种结构逐一遍历尝试。
+        found = False
+        for script_name, tree_key, wrap, validator in [
+            ("GameInformation",      "GameInformation",      False, lambda d: "song" in d),
+            ("GetCollectionControl", "GetCollectionControl", True,  lambda d: hasattr(d, "collectionItems")),
+            ("TipsProvider",         "TipsProvider",         True,  lambda d: hasattr(d, "tips") and len(d.tips) > 0),
+        ]:
+            try:
+                candidate = obj.read_typetree(typetree[tree_key], wrap)
+                if validator(candidate):
+                    if script_name == "GameInformation":
+                        GameInformation = candidate
+                    elif script_name == "GetCollectionControl":
+                        Collections = candidate
+                    elif script_name == "TipsProvider":
+                        Tips = candidate
+                    found = True
+                    break
+            except Exception:
+                continue
+        if not found:
             skipped += 1
-            continue
-        
-        if script.name == "GameInformation":
-            GameInformation = obj.read_typetree(typetree["GameInformation"])
-        elif script.name == "GetCollectionControl":
-            Collections = obj.read_typetree(typetree["GetCollectionControl"], True)
-        elif script.name == "TipsProvider":
-            Tips = obj.read_typetree(typetree["TipsProvider"], True)
 
     if skipped:
-        print(f"跳过 {skipped} 个不兼容的 MonoBehaviour 对象")
+        print(f"跳过 {skipped} 个无法匹配的 MonoBehaviour 对象")
 
     if not GameInformation:
         print("错误：未找到 GameInformation 数据块！")
