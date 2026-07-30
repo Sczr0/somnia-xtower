@@ -55,7 +55,7 @@ jobs:
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install Pillow
+          pip install Pillow UnityPy
 
       # 4.5 安装 .NET 10（PhiInfo.CLI 运行时）
       - name: Set up .NET 10
@@ -83,15 +83,20 @@ jobs:
       - name: Translate Output Structure
         run: python3 translate.py
 
-      # 5.7 生成缺失资产（illustration PNG → lilith WebP/AVIF + 低分辨率 PNG）
+      # 5.7 从 APK 提取游戏元数据（补充 single.txt、illustration.txt、collection.tsv、avatar.txt、tips.txt、CSV 等）
+      - name: Extract Game Info from APK
+        run: |
+          python -c "import gameInformation; gameInformation.extract_game_info('game.apk', 'output')"
+
+      # 5.8 生成缺失资产（illustration PNG → lilith WebP/AVIF + 低分辨率 PNG）
       - name: Generate Missing Assets
         run: python3 generate_lowres.py
 
-      # 5.8 打包 Phira (.pez)
+      # 5.9 打包 Phira (.pez)
       - name: Package Phira
         run: python3 phira.py
 
-      # 5.9 生成版本文件（优先使用 PhiInfo 的 version.json，否则 fallback）
+      # 5.10 生成版本文件（优先使用 PhiInfo 的 version.json，否则 fallback）
       - name: Generate Version File
         env:
           VERSION_NAME: ${{ inputs.version_name || github.event.client_payload.version_name }}
@@ -122,7 +127,7 @@ jobs:
           printf '%s\n' "${VERSION_TEXT}" > output/info/version.txt
           echo "Generated output/info/version.txt => ${VERSION_TEXT}"
 
-      # 5.10 最终生成索引（files.json + _redirects + checksums.sha256）
+      # 5.11 最终生成索引（files.json + _redirects + checksums.sha256）
       - name: Generate Final Index
         run: |
           python -c "import generate_index; generate_index.generate_site_resources()"
