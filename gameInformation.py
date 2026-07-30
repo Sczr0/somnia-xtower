@@ -60,12 +60,17 @@ def extract_game_info(apk_path, output_root="output"):
     Collections = None
     Tips = None
 
+    skipped = 0
     for obj in env.objects:
         if obj.type.name != "MonoBehaviour":
             continue
-        # 解析 MonoBehaviour
-        data = obj.read()
-        script = data.m_Script.get_obj().read()
+        # 解析 MonoBehaviour（部分对象受 Unity 版本影响可能不兼容，跳过即可）
+        try:
+            data = obj.read()
+            script = data.m_Script.get_obj().read()
+        except Exception:
+            skipped += 1
+            continue
         
         if script.name == "GameInformation":
             GameInformation = obj.read_typetree(typetree["GameInformation"])
@@ -73,6 +78,9 @@ def extract_game_info(apk_path, output_root="output"):
             Collections = obj.read_typetree(typetree["GetCollectionControl"], True)
         elif script.name == "TipsProvider":
             Tips = obj.read_typetree(typetree["TipsProvider"], True)
+
+    if skipped:
+        print(f"跳过 {skipped} 个不兼容的 MonoBehaviour 对象")
 
     if not GameInformation:
         print("错误：未找到 GameInformation 数据块！")
