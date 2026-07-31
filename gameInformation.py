@@ -124,7 +124,9 @@ def extract_game_info(apk_path, output_root="output"):
             difficulty_csv_list.append([song_id] + fixed_diff)
 
             info_csv_row = [song_id, song["songsName"], song["composer"], song["illustrator"]]
-            info_csv_row.extend(fixed_diff)
+            # EZ/HD/IN/AT 列存各难度的谱师名（与 difficulty 同序，末尾已同步清洗对齐）
+            fixed_charter = _to_fixed_4_difficulty(song["charter"])
+            info_csv_row.extend(fixed_charter)
             info_csv_list.append(info_csv_row)
             
             # info.tsv 结构: ID, Name, Composer, Illustrator, Charter...
@@ -148,7 +150,7 @@ def extract_game_info(apk_path, output_root="output"):
         writer.writerow(["id", "EZ", "HD", "IN", "AT"])
         writer.writerows(difficulty_csv_list)
 
-    # 写入 output/info/info.csv
+    # 写入 output/info/info.csv (EZ/HD/IN/AT 列为对应难度的谱师名)
     with open(os.path.join(info_dir, "info.csv"), "w", encoding="utf8", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["id", "song", "composer", "illustrator", "EZ", "HD", "IN", "AT"])
