@@ -57,12 +57,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install Pillow UnityPy
 
-      # 4.5 安装 .NET 10（PhiInfo.CLI 运行时）
+      # 4.5 安装 .NET 10（PhiInfo.CLI 编译与运行时）
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
           include-prerelease: true
+
+      # 4.6 克隆并编译 PhiInfo 源码（替代仓库内预编译 DLL，自动跟随上游修复）
+      - name: Clone & Build PhiInfo
+        run: |
+          git clone --depth=1 https://github.com/PhigrosLabs/PhiInfo.git /tmp/phiinfo
+          dotnet build /tmp/phiinfo/src/PhiInfo.CLI -c Release
 
       # 5. 下载 APK（由触发时传入链接）
       - name: Download APK
@@ -74,7 +80,7 @@ jobs:
       # 5.5 PhiInfo 导出（PNG 格式，前端需要 PNG）
       - name: PhiInfo Export
         run: |
-          dotnet PhiInfo.CLI/PhiInfo.CLI.dll \
+          dotnet /tmp/phiinfo/src/PhiInfo.CLI/bin/Release/net10.0/PhiInfo.CLI.dll \
             -p game.apk \
             --image-format Png \
             export -o output
