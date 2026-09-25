@@ -55,8 +55,9 @@ def generate_phira_packages():
         with open(info_path, "r", encoding="utf8") as f:
             for line in f:
                 line = line.strip().split("\t")
-                if len(line) < 5: continue
-                infos[line[0]] = {"Name": line[1], "Composer": line[2], "Illustrator": line[3], "Chater": line[4:]}
+                # info.tsv: id, song, composer, illustrator, EZ, HD, IN, AT, EZC, HDC, INC, ATC
+                if len(line) < 12: continue
+                infos[line[0]] = {"Name": line[1], "Composer": line[2], "Illustrator": line[3], "Chater": line[8:12]}
     except FileNotFoundError:
         print(f"错误：找不到 info.tsv ({info_path})")
         return

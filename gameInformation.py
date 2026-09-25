@@ -1,208 +1,84 @@
+"""从 APK 的 GameInformation 里提取 keyStore 派生的 single.txt / illustration.txt。
+
+PhiInfo 不导出 keyStore，所以这两个文件继续用 UnityPy + typetree.json 兜底；
+其余 info/ 发布文件全部由 info_export.py 负责，避免两个生产者抢同一批文件。
+本模块失败只告警，不阻断发布。
+"""
 import json
 import os
 import sys
 import zipfile
-import csv
+
 from UnityPy import Environment
 
 
-def _sanitize_song_id(song_id):
-    """统一处理谱面 ID 后缀"""
-    if song_id.endswith(".0") or song_id.endswith("_0"):
-        return song_id[:-2]
-    return song_id
+def _to_text(value):
+    return "" if value is None else str(value).strip()
 
 
-def _safe_avatar_key(addressable_key):
-    """兼容 addressableKey 为空或长度不足的情况"""
-    if isinstance(addressable_key, str) and len(addressable_key) >= 7:
-        return addressable_key[7:]
-    return ""
-
-
-def _to_fixed_4_difficulty(difficulty_values):
-    """将难度列表补齐为 EZ/HD/IN/AT 四列"""
-    values = list(difficulty_values[:4])
-    while len(values) < 4:
-        values.append("")
-    return values
-
-# 适配自动化：不再依赖 sys.argv，而是封装成函数供 main.py 调用
-def extract_game_info(apk_path, output_root="output"):
-    print("--- 开始提取游戏基础信息 (GameInformation) ---")
-    
-    # 确保目标目录存在：output/info
+def extract_keystore(apk_path, output_root="output"):
+    """写入 output/info/{single.txt,illustration.txt}，成功返回 True。"""
     info_dir = os.path.join(output_root, "info")
     os.makedirs(info_dir, exist_ok=True)
 
-    # 加载 typetree (确保 typetree.json 在项目根目录)
     if not os.path.exists("typetree.json"):
-        print("错误：找不到 typetree.json，无法解析数据！")
-        return
+        print("警告：找不到 typetree.json，无法提取 keyStore。")
+        return False
 
-    with open("typetree.json", encoding='utf-8') as f:
+    with open("typetree.json", encoding="utf-8") as f:
         typetree = json.load(f)
 
     env = Environment()
     with zipfile.ZipFile(apk_path) as apk:
-        # 加载必要的文件
         if "assets/bin/Data/globalgamemanagers.assets" in apk.namelist():
             with apk.open("assets/bin/Data/globalgamemanagers.assets") as f:
                 env.load_file(f.read(), name="assets/bin/Data/globalgamemanagers.assets")
-        
-        # 尝试加载 level0 (有些版本可能叫其他名字，但这通常是主入口)
         if "assets/bin/Data/level0" in apk.namelist():
             with apk.open("assets/bin/Data/level0") as f:
                 env.load_file(f.read())
 
-    # 查找关键对象
-    GameInformation = None
-    Collections = None
-    Tips = None
-
-    skipped = 0
+    key_store = None
     for obj in env.objects:
         if obj.type.name != "MonoBehaviour":
             continue
-        # obj.read() 依赖 UnityPy 内置 class database，新 Unity 版本可能不兼容。
-        # 改用 typetree.json 中已知的三种结构逐一遍历尝试。
-        found = False
-        for script_name, tree_key, wrap, validator in [
-            ("GameInformation",      "GameInformation",      False, lambda d: "song" in d),
-            ("GetCollectionControl", "GetCollectionControl", True,  lambda d: hasattr(d, "collectionItems")),
-            ("TipsProvider",         "TipsProvider",         True,  lambda d: hasattr(d, "tips") and len(d.tips) > 0),
-        ]:
-            try:
-                candidate = obj.read_typetree(typetree[tree_key], wrap)
-                if validator(candidate):
-                    if script_name == "GameInformation":
-                        GameInformation = candidate
-                    elif script_name == "GetCollectionControl":
-                        Collections = candidate
-                    elif script_name == "TipsProvider":
-                        Tips = candidate
-                    found = True
-                    break
-            except Exception:
-                continue
-        if not found:
-            skipped += 1
-
-    if skipped:
-        print(f"跳过 {skipped} 个无法匹配的 MonoBehaviour 对象")
-
-    if not GameInformation:
-        print("错误：未找到 GameInformation 数据块！")
-        return
-
-    # === 处理 difficulty.tsv / info.tsv 以及 CSV 输出 ===
-    difficulty_list = []
-    table_list = []
-    difficulty_csv_list = []
-    info_csv_list = []
-    
-    for key, songs in GameInformation["song"].items():
-        if key == "otherSongs":
+        try:
+            candidate = obj.read_typetree(typetree["GameInformation"], False)
+        except Exception:
             continue
-        for song in songs:
-            # 数据清洗逻辑（保留你原来的逻辑）
-            if len(song["difficulty"]) == 5:
-                song["difficulty"].pop()
-            if song["difficulty"][-1] == 0.0:
-                song["difficulty"].pop()
-                if len(song["charter"]) > len(song["difficulty"]):
-                    song["charter"].pop() # 防止越界
-            
-            # 难度保留一位小数
-            diff_str = [str(round(d, 1)) for d in song["difficulty"]]
-            
-            # ID修正
-            song_id = _sanitize_song_id(song["songsId"])
-            fixed_diff = _to_fixed_4_difficulty(diff_str)
+        if isinstance(candidate, dict) and "keyStore" in candidate:
+            key_store = candidate["keyStore"]
+            break
 
-            difficulty_list.append([song_id] + diff_str)
-            difficulty_csv_list.append([song_id] + fixed_diff)
+    if key_store is None:
+        print("警告：未能从 level0 读到 GameInformation.keyStore（游戏版本可能已变更）。")
+        return False
 
-            info_csv_row = [song_id, song["songsName"], song["composer"], song["illustrator"]]
-            # EZ/HD/IN/AT 列存各难度的谱师名（与 difficulty 同序，末尾已同步清洗对齐）
-            fixed_charter = _to_fixed_4_difficulty(song["charter"])
-            info_csv_row.extend(fixed_charter)
-            info_csv_list.append(info_csv_row)
-            
-            # info.tsv 结构: ID, Name, Composer, Illustrator, Charter...
-            row = [song_id, song["songsName"], song["composer"], song["illustrator"]]
-            row.extend(song["charter"])
-            table_list.append(tuple(row))
-
-    # 写入 output/info/difficulty.tsv
-    with open(os.path.join(info_dir, "difficulty.tsv"), "w", encoding="utf8") as f:
-        for item in difficulty_list:
-            f.write("\t".join(map(str, item)) + "\n")
-
-    # 写入 output/info/info.tsv
-    with open(os.path.join(info_dir, "info.tsv"), "w", encoding="utf8") as f:
-        for item in table_list:
-            f.write("\t".join(map(str, item)) + "\n")
-
-    # 写入 output/info/difficulty.csv
-    with open(os.path.join(info_dir, "difficulty.csv"), "w", encoding="utf8", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["id", "EZ", "HD", "IN", "AT"])
-        writer.writerows(difficulty_csv_list)
-
-    # 写入 output/info/info.csv (EZ/HD/IN/AT 列为对应难度的谱师名)
-    with open(os.path.join(info_dir, "info.csv"), "w", encoding="utf8", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["id", "song", "composer", "illustrator", "EZ", "HD", "IN", "AT"])
-        writer.writerows(info_csv_list)
-
-    # === 处理 KeyStore (single.txt, illustration.txt) ===
     single = []
     illustration = []
-    if "keyStore" in GameInformation:
-        for key in GameInformation["keyStore"]:
-            if key["kindOfKey"] == 0:
-                single.append(key["keyName"])
-            elif key["kindOfKey"] == 2 and key["keyName"] != "Introduction" and key["keyName"] not in single:
-                illustration.append(key["keyName"])
+    for key in key_store:
+        kind = key["kindOfKey"]
+        key_name = _to_text(key["keyName"])
+        if kind == 0:
+            single.append(key_name)
+        elif kind == 2 and key_name != "Introduction" and key_name not in single:
+            illustration.append(key_name)
 
     with open(os.path.join(info_dir, "single.txt"), "w", encoding="utf8") as f:
         f.write("\n".join(single))
-
     with open(os.path.join(info_dir, "illustration.txt"), "w", encoding="utf8") as f:
         f.write("\n".join(illustration))
 
-    # === 处理 Collections (collection.tsv, avatar.txt, tmp.tsv) ===
-    if Collections:
-        collection_dict = {}
-        for item in Collections.collectionItems:
-            if item.key in collection_dict:
-                collection_dict[item.key][1] = item.subIndex
-            else:
-                collection_dict[item.key] = [item.multiLanguageTitle.chinese, item.subIndex]
+    print(
+        f"--- keyStore 提取完成: single={len(single)} illustration={len(illustration)} ---",
+        flush=True,
+    )
+    return True
 
-        with open(os.path.join(info_dir, "collection.tsv"), "w", encoding="utf8") as f:
-            for key, value in collection_dict.items():
-                f.write(f"{key}\t{value[0]}\t{value[1]}\n")
-
-        with open(os.path.join(info_dir, "avatar.txt"), "w", encoding="utf8") as f_avatar, \
-             open(os.path.join(info_dir, "tmp.tsv"), "w", encoding="utf8") as f_tmp:
-            # avatar.txt 存头像名称，tmp.tsv 存头像名称到资源键的映射
-            for item in Collections.avatars:
-                f_avatar.write(f"{item.name}\n")
-                f_tmp.write(f"{item.name}\t{_safe_avatar_key(getattr(item, 'addressableKey', ''))}\n")
-    
-    # === 处理 Tips ===
-    if Tips and len(Tips.tips) > 0:
-        with open(os.path.join(info_dir, "tips.txt"), "w", encoding="utf8") as f:
-            for tip in Tips.tips[0].tips:
-                f.write(f"{tip}\n")
-
-    print(f"--- 游戏信息提取完成，文件已保存至 {info_dir} ---")
 
 if __name__ == "__main__":
-    # 允许本地单独测试
-    if len(sys.argv) > 1:
-        extract_game_info(sys.argv[1], "output")
-    else:
-        print("用法: python gameInformation.py <apk_path>")
+    argv = [arg for arg in sys.argv[1:] if arg != "--keystore-only"]
+    if not argv:
+        print("用法: python gameInformation.py [--keystore-only] <apk_path> [output_root]")
+        sys.exit(2)
+    root = argv[1] if len(argv) > 1 else "output"
+    sys.exit(0 if extract_keystore(argv[0], root) else 1)

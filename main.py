@@ -7,6 +7,7 @@ import platform
 
 # 引入你的功能模块
 import gameInformation
+import info_export
 import resource
 import phira 
 import generate_index
@@ -100,11 +101,19 @@ def main():
     # === 2. 提取信息 (GameInfo) ===
     flush_print("\n--- [Step 2] 提取游戏文本信息 (GameInfo) ---")
     try:
-        # 调用 gameInformation.py 中的函数
-        gameInformation.extract_game_info(APK_FILENAME, OUTPUT_DIR)
+        # keyStore 兜底（PhiInfo 不导出的 single.txt / illustration.txt）
+        gameInformation.extract_keystore(APK_FILENAME, OUTPUT_DIR)
     except Exception as e:
-        flush_print(f"!! 提取 GameInfo 失败: {e}")
-        # Info 失败通常不影响资源提取，继续运行
+        flush_print(f"!! keyStore 兜底失败: {e}")
+
+    # /info 发布契约由 PhiInfo 的导出结果生成：需要先跑 PhiInfo export 产出 output/info/*.json
+    if os.path.exists(os.path.join(OUTPUT_DIR, "info", "songs.json")):
+        try:
+            info_export.export_published_info(OUTPUT_DIR)
+        except Exception as e:
+            flush_print(f"!! /info 发布契约生成失败: {e}")
+    else:
+        flush_print("!! 未找到 output/info/songs.json（需先执行 PhiInfo export），跳过 /info 发布契约生成")
 
     # === 3. 提取资源 (Resource) ===
     flush_print("\n--- [Step 3] 提取图片与音乐 (Resource) ---")
