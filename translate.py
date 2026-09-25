@@ -182,11 +182,30 @@ def translate_version():
     print(f"  version.txt: {text}")
 
 
+def _pick_language(mapping, preferred="zh_cn"):
+    """从 PhiInfo 的多语言字段中取指定语言，缺失时退回任意非空语言。"""
+    if not isinstance(mapping, dict):
+        return ""
+    if mapping.get(preferred):
+        return mapping[preferred]
+    for value in mapping.values():
+        if value:
+            return value
+    return ""
+
+
+def _safe_avatar_key(addressable_key):
+    """兼容 addressableKey 为空或长度不足的情况（去掉 avatar. 前缀，与旧 tmp.tsv 一致）。"""
+    if isinstance(addressable_key, str) and len(addressable_key) >= 7:
+        return addressable_key[7:]
+    return ""
+
+
 def translate_all_info():
     """生成 info/all_info.json（合并 songs + collection + avatars + tips）。
 
-    songs 来自 PhiInfo 的 songs.json，
-    collection/avatars/tips 来自 manual_assets/info/ 的静态文件。
+    全部取自 PhiInfo 的导出结果（songs.json / collection.json / avatars.json / tips.json），
+    collection 仍展开为旧的扁平结构，保持输出格式不变。
     """
     songs_path = os.path.join(INFO_DIR, "songs.json")
     if not os.path.exists(songs_path):
@@ -197,40 +216,53 @@ def translate_all_info():
         songs = json.load(f)
 
     all_info = {"songs": songs, "collection": [], "avatars": [], "tips": []}
-    manual_info = os.path.join(os.path.dirname(__file__) or ".", "manual_assets", "info")
 
     # --- collection ---
-    coll_path = os.path.join(manual_info, "collection.tsv")
+    # PhiInfo 4.0.0 起 collection.json 为 文件夹 -> 条目 结构，
+    # 展开时对齐旧 collection.tsv：同一 key 保留首个名称、取最后一个 sub_index。
+    coll_path = os.path.join(INFO_DIR, "collection.json")
     if os.path.exists(coll_path):
         with open(coll_path, "r", encoding="utf-8") as f:
-            for line in f:
-                parts = line.strip().split("\t")
-                if len(parts) >= 3:
-                    all_info["collection"].append({
-                        "key": parts[0],
-                        "name": parts[1],
-                        "sub_index": int(parts[2]) if parts[2].isdigit() else parts[2],
-                    })
+            folders = json.load(f)
+
+        collection = {}
+        for folder in folders:
+            for item in folder.get("files", []):
+                key = item.get("key", "")
+                if key in collection:
+                    collection[key]["sub_index"] = item.get("sub_index")
+                else:
+                    collection[key] = {
+                        "key": key,
+                        "name": _pick_language(item.get("name")),
+                        "sub_index": item.get("sub_index"),
+                    }
+        all_info["collection"] = list(collection.values())
         print(f"  collection: {len(all_info['collection'])} items")
 
     # --- avatars ---
-    tmp_path = os.path.join(manual_info, "tmp.tsv")
-    if os.path.exists(tmp_path):
-        with open(tmp_path, "r", encoding="utf-8") as f:
-            for line in f:
-                parts = line.strip().split("\t")
-                if len(parts) >= 2:
-                    all_info["avatars"].append({
-                        "name": parts[0],
-                        "addressable_key": parts[1],
-                    })
+    avatars_path = os.path.join(INFO_DIR, "avatars.json")
+    if os.path.exists(avatars_path):
+        with open(avatars_path, "r", encoding="utf-8") as f:
+            for item in json.load(f):
+                all_info["avatars"].append({
+                    "name": item.get("name", ""),
+                    "addressable_key": _safe_avatar_key(item.get("addressable_key", "")),
+                })
         print(f"  avatars: {len(all_info['avatars'])} items")
 
     # --- tips ---
-    tips_path = os.path.join(manual_info, "tips.txt")
+    tips_path = os.path.join(INFO_DIR, "tips.json")
     if os.path.exists(tips_path):
         with open(tips_path, "r", encoding="utf-8") as f:
-            all_info["tips"] = [line.strip() for line in f if line.strip()]
+            tips = json.load(f)
+        if isinstance(tips, dict):
+            for lang in ("zh_cn", "zh_tw", "en", "ja", "ko"):
+                if tips.get(lang):
+                    all_info["tips"] = tips[lang]
+                    break
+        elif isinstance(tips, list):
+            all_info["tips"] = tips
         print(f"  tips: {len(all_info['tips'])} items")
 
     out_path = os.path.join(INFO_DIR, "all_info.json")
