@@ -9,6 +9,10 @@
 /assets/*
   Cache-Control: public, max-age=600, stale-while-revalidate=2592000
 
+# 数据契约文件：短缓存，避免下游长时间读到旧版本/缺失兜底页
+/info/*
+  Cache-Control: public, max-age=60, stale-while-revalidate=300
+
 /Source Han Serif CN Light/*
   Cache-Control: public, max-age=31536000, immutable
 

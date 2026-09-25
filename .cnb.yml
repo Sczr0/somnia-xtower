@@ -10,11 +10,12 @@ main:
         tags: cnb:arch:amd64
         cpus: 8
       stages:
-        # 1. 安装工具 (python3 仅用于 translate/generate_index/phira, 都是纯标准库)
+        # 1. 安装工具 (translate/info_export/phira/generate_index 均为纯标准库，UnityPy 仅用于 keyStore 兜底)
         - name: Install Tools
           script: |
             apt-get update -qq
             apt-get install -y -qq --no-install-recommends aria2 python3 python3-pip python3-pil
+            pip install --break-system-packages UnityPy==1.10.18 || echo "UnityPy 安装失败，keyStore 兜底不可用（不阻断）"
 
         # 2. 克隆 PhiInfo 源码并编译
         - name: Build PhiInfo
@@ -30,9 +31,17 @@ main:
         - name: PhiInfo Export
           script: dotnet /tmp/phiinfo/src/PhiInfo.CLI/bin/Release/net10.0/PhiInfo.CLI.dll -p game.apk --image-format Png export -o output
 
-        # 5. 翻译目录结构 + 生成 TSV (适配 generate_index 和 phira)
+        # 5. 翻译目录结构（asset/ → chart / music / illustration / avatar）
         - name: Translate Output
           script: python3 translate.py
+
+        # 5.1 keyStore 兜底（PhiInfo 不导出 single.txt / illustration.txt，失败不阻断）
+        - name: Extract keyStore (best-effort)
+          script: python3 gameInformation.py --keystore-only game.apk output || echo "keystore fallback failed (non-blocking)"
+
+        # 5.2 生成并校验 /info 发布契约（唯一生产者，失败即失败）
+        - name: Export Published Info
+          script: python3 info_export.py
 
         # 6. 补齐缺失资产：illustration PNG → lilith WebP/AVIF + 低分辨率 PNG
         - name: Generate Missing Assets
@@ -52,6 +61,7 @@ main:
             git clone --depth=1 "https://cnb:${CNB_TOKEN}@cnb.cool/r-0semi/asset-xtower.git" /tmp/asset-repo
             rm -rf /tmp/asset-repo/chart /tmp/asset-repo/music /tmp/asset-repo/illustration /tmp/asset-repo/illustrationBlur /tmp/asset-repo/illustrationLowRes /tmp/asset-repo/avatar /tmp/asset-repo/info /tmp/asset-repo/phira
             cp -r output/* /tmp/asset-repo/
+            python3 info_export.py --verify-only /tmp/asset-repo
             cd /tmp/asset-repo
             git config user.name "r-0semi"
             git config user.email "sczr0710@163.com"
