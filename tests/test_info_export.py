@@ -242,27 +242,58 @@ class ValidateTests(InfoExportTestCase):
 class TranslateAssetPathTests(unittest.TestCase):
     def test_chart_and_music_mapping(self):
         self.assertEqual(
-            translate._map_asset_path("Assets/Tracks/Song.Author.0/Chart_EZ.json.txt"),
-            "chart/Song.Author.0/EZ.json",
+            translate._map_asset_paths("Assets/Tracks/Song.Author.0/Chart_EZ.json.txt"),
+            ["chart/Song.Author.0/EZ.json"],
         )
         self.assertEqual(
-            translate._map_asset_path("Assets/Tracks/Song.Author.0/music.wav.ogg"),
-            "music/Song.Author.ogg",
+            translate._map_asset_paths("Assets/Tracks/Song.Author.0/music.wav.ogg"),
+            ["music/Song.Author.ogg"],
         )
 
     def test_illustration_and_avatar_mapping(self):
         self.assertEqual(
-            translate._map_asset_path("Assets/Tracks/Song.Author.0/Illustration.jpg.png"),
-            "illustration/Song.Author.png",
+            translate._map_asset_paths("Assets/Tracks/Song.Author.0/Illustration.jpg.png"),
+            ["illustration/Song.Author.png"],
         )
         self.assertEqual(
-            translate._map_asset_path("Assets/Tracks/Song.Author.0/IllustrationLowRes.jpg.png"),
-            "illustrationLowRes/Song.Author.png",
+            translate._map_asset_paths("Assets/Tracks/Song.Author.0/IllustrationLowRes.jpg.png"),
+            ["illustrationLowRes/Song.Author.png"],
         )
-        self.assertEqual(translate._map_asset_path("avatar.SunsetRay.png"), "avatar/SunsetRay.png")
+        self.assertEqual(translate._map_asset_paths("avatar.SunsetRay.png"), ["avatar/SunsetRay.png"])
+
+    def test_different_illustration_variants_are_kept_per_difficulty(self):
+        # 差分曲绘：EZ/HD/IN/AT 都带难度后缀；AT 额外再产出一份无后缀默认图。
+        self.assertEqual(
+            translate._map_asset_paths("Assets/Tracks/Song.Author.0/Illustration_AT.jpg.png"),
+            ["illustration/Song.Author.png", "illustration/Song.Author_AT.png"],
+        )
+        self.assertEqual(
+            translate._map_asset_paths("Assets/Tracks/Song.Author.0/Illustration_EZ.jpg.png"),
+            ["illustration/Song.Author_EZ.png"],
+        )
+        self.assertEqual(
+            translate._map_asset_paths("Assets/Tracks/Song.Author.0/Illustration_HD.jpg.png"),
+            ["illustration/Song.Author_HD.png"],
+        )
+        self.assertEqual(
+            translate._map_asset_paths("Assets/Tracks/Song.Author.0/Illustration_IN.jpg.png"),
+            ["illustration/Song.Author_IN.png"],
+        )
+        self.assertEqual(
+            translate._map_asset_paths("Assets/Tracks/Song.Author.0/IllustrationBlur_IN.jpg.png"),
+            ["illustrationBlur/Song.Author_IN.png"],
+        )
+        self.assertEqual(
+            translate._map_asset_paths("Assets/Tracks/Song.Author.0/IllustrationLowRes_AT.jpg.png"),
+            ["illustrationLowRes/Song.Author.png", "illustrationLowRes/Song.Author_AT.png"],
+        )
+        self.assertEqual(
+            translate._map_asset_paths("Assets/Tracks/Song.Author.0/IllustrationLowRes_EZ.jpg.png"),
+            ["illustrationLowRes/Song.Author_EZ.png"],
+        )
 
     def test_metadata_is_skipped(self):
-        self.assertIsNone(translate._map_asset_path("metadata.json"))
+        self.assertEqual(translate._map_asset_paths("metadata.json"), [])
 
 
 if __name__ == "__main__":
