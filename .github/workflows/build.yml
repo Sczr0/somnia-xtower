@@ -68,6 +68,8 @@ jobs:
       - name: Clone & Build PhiInfo
         run: |
           git clone --depth=1 https://github.com/PhigrosLabs/PhiInfo.git /tmp/phiinfo
+          # 上游缺失 format 45（ETC2_RGB）解码，补丁幂等
+          python3 patch_phiinfo.py /tmp/phiinfo/src/PhiInfo.Processing/PhiInfoDecoders.cs
           dotnet build /tmp/phiinfo/src/PhiInfo.CLI -c Release
 
       # 5. 下载 APK（由触发时传入链接）
